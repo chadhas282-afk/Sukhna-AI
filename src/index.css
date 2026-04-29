@@ -1,0 +1,202 @@
+@import url('https://fonts.googleapis.com/css2?family=Cascadia+Code:ital,wght@0,200..700;1,200..700&family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --color-dark-900: #0f172a;
+  --color-dark-800: #1e293b;
+  --color-dark-700: #334155;
+  --color-primary: #6366f1;
+  --color-primary-hover: #4f46e5;
+  --color-accent: #8b5cf6;
+  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'Cascadia Code', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background-color: var(--color-dark-900);
+  color: white;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-dark-700);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-primary);
+}
+
+/* Glassmorphism utilities */
+.glass-panel {
+  background: rgba(30, 41, 59, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.gradient-text {
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-image: linear-gradient(to right, var(--color-primary), var(--color-accent));
+}
+
+.message-bubble-user {
+  background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
+}
+
+.message-bubble-ai {
+  background: rgba(30, 41, 59, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+@keyframes pulse-glow {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.8; transform: scale(1.05); }
+}
+
+.typing-dot {
+  animation: typing 1.4s infinite ease-in-out both;
+}
+.typing-dot:nth-child(1) { animation-delay: -0.32s; }
+.typing-dot:nth-child(2) { animation-delay: -0.16s; }
+
+@keyframes typing {
+  0%, 80%, 100% { transform: scale(0); }
+  40% { transform: scale(1); }
+}
+
+/* Bubble animations */
+.bubbles-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.bubble {
+  position: absolute;
+  bottom: -100px;
+  background: rgba(255, 20, 147, 0.2); /* Neon pink background */
+  box-shadow: 0 0 15px rgba(255, 20, 147, 0.5), 0 0 30px rgba(255, 20, 147, 0.3), inset 0 0 15px rgba(255, 20, 147, 0.2);
+  border-radius: 50%;
+  animation: float 15s infinite ease-in;
+}
+
+.bubble:nth-child(1) { width: 40px; height: 40px; left: 10%; animation-duration: 18s; animation-delay: 0s; }
+.bubble:nth-child(2) { width: 80px; height: 80px; left: 20%; animation-duration: 25s; animation-delay: 2s; }
+.bubble:nth-child(3) { width: 50px; height: 50px; left: 35%; animation-duration: 20s; animation-delay: 4s; }
+.bubble:nth-child(4) { width: 100px; height: 100px; left: 50%; animation-duration: 22s; animation-delay: 1s; }
+.bubble:nth-child(5) { width: 30px; height: 30px; left: 65%; animation-duration: 15s; animation-delay: 5s; }
+.bubble:nth-child(6) { width: 60px; height: 60px; left: 75%; animation-duration: 28s; animation-delay: 3s; }
+.bubble:nth-child(7) { width: 90px; height: 90px; left: 85%; animation-duration: 21s; animation-delay: 0s; }
+.bubble:nth-child(8) { width: 45px; height: 45px; left: 95%; animation-duration: 19s; animation-delay: 2s; }
+
+@keyframes float {
+  0% {
+    transform: translateY(0) scale(1);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  90% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-120vh) scale(1.5);
+    opacity: 0;
+  }
+}
+
+/* Galaxy Theme Cursors */
+.galaxy-cursor, .galaxy-cursor * {
+  cursor: url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyMCIgaGVpZ2h0PSIyMCIgdmlld0JveD0iMCAwIDI0IDI0Ij48cG9seWdvbiBwb2ludHM9IjEyIDIgMTUuMDkgOC4yNiAyMiA5LjI3IDE3IDE0LjE0IDE4LjE4IDIxLjAyIDEyIDE3Ljc3IDUuODIgMjEuMDIgNyAxNC4xNCAyIDkuMjcgOC45MSA4LjI2IDEyIDIiIGZpbGw9IiNlYWIzMDgiIHN0cm9rZT0iI2ZkZTA0NyIgc3Ryb2tlLXdpZHRoPSIxIiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+PC9zdmc+') 10 10, auto !important;
+}
+
+.galaxy-cursor a, 
+.galaxy-cursor button, 
+.galaxy-cursor [role="button"],
+.galaxy-cursor a *, 
+.galaxy-cursor button *, 
+.galaxy-cursor [role="button"] * {
+  cursor: url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0Ij48cG9seWdvbiBwb2ludHM9IjEyIDIgMTUuMDkgOC4yNiAyMiA5LjI3IDE3IDE0LjE0IDE4LjE4IDIxLjAyIDEyIDE3Ljc3IDUuODIgMjEuMDIgNyAxNC4xNCAyIDkuMjcgOC45MSA4LjI2IDEyIDIiIGZpbGw9IiNmZGUwNDciIHN0cm9rZT0iI2ZmZiIgc3Ryb2tlLXdpZHRoPSIxLjUiIHN0cm9rZS1saW5lam9pbj0icm91bmQiLz48L3N2Zz4=') 12 12, pointer !important;
+}
+
+/* --- Unique Cosmic Neon Aura Hover --- */
+.btn-creative-hover {
+  position: relative;
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+  transform-style: preserve-3d;
+}
+
+/* The sharp glowing border */
+.btn-creative-hover::before {
+  content: '';
+  position: absolute;
+  top: -3px; left: -3px; right: -3px; bottom: -3px;
+  background: linear-gradient(90deg, #fcd34d, #ec4899, #8b5cf6, #3b82f6, #fcd34d);
+  background-size: 300% 100%;
+  border-radius: inherit;
+  z-index: -1;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+
+/* The blurred glowing aura */
+.btn-creative-hover::after {
+  content: '';
+  position: absolute;
+  top: -2px; left: -2px; right: -2px; bottom: -2px;
+  background: linear-gradient(90deg, #fcd34d, #ec4899, #8b5cf6, #3b82f6, #fcd34d);
+  background-size: 300% 100%;
+  border-radius: inherit;
+  z-index: -2;
+  opacity: 0;
+  filter: blur(12px);
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+
+.btn-creative-hover:not(:disabled):hover {
+  transform: translateY(-3px) scale(1.05);
+}
+
+.btn-creative-hover:not(:disabled):hover::before,
+.btn-creative-hover:not(:disabled):hover::after {
+  opacity: 1;
+  animation: neon-flow 2s linear infinite;
+}
+
+@keyframes neon-flow {
+  0% { background-position: 0% 0%; }
+  100% { background-position: 150% 0%; }
+}
+
+/* Make the icon inside bounce playfully */
+.btn-creative-hover:not(:disabled):hover svg {
+  animation: creative-bounce 0.8s cubic-bezier(0.28, 0.84, 0.42, 1) infinite alternate;
+  filter: drop-shadow(0 0 6px rgba(255,255,255,0.8));
+}
+
+@keyframes creative-bounce {
+  0% { transform: scale(1) translateY(0); }
+  100% { transform: scale(1.15) translateY(-3px); }
+}
+
