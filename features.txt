@@ -1,0 +1,14 @@
+todo:
+1. add meta data in the head tag of index.html file
+
+features:
+1. add settings page
+1.a add themes change in it
+
+2. add flora and fauna themes
+3. add a light/white theme 
+
+4. in default theme, add bubble toggle button.
+
+5. add stop response button 
+6. add edit user query and copy button
