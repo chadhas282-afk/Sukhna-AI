@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { CreateWebWorkerMLCEngine } from "@mlc-ai/web-llm";
-import { Send, Bot, User, Loader2, Sparkles, AlertCircle, Copy, Check, RefreshCw, ArrowDown, Plus, MessageSquare, PanelLeft, X, Trash2 } from 'lucide-react';
+import { Send, Bot, User, Loader2, Sparkles, AlertCircle, Copy, Check, RefreshCw, ArrowDown, Plus, MessageSquare, PanelLeft, X, Trash2, Settings as SettingsIcon, Globe, Moon, Sun, Info } from 'lucide-react';
 import { motion, AnimatePresence, useScroll, useTransform, useMotionValue, useSpring } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -161,6 +161,17 @@ function App() {
   const [messages, setMessages] = useState([]);
   const [theme, setTheme] = useState(() => localStorage.getItem('local-pilot-theme') || 'default');
   const [isSidebarOpen, setIsSidebarOpen] = useState(window.innerWidth >= 1024);
+  const [activeView, setActiveView] = useState('chat'); // 'chat' or 'settings'
+  const [isDeletingAll, setIsDeletingAll] = useState(false);
+  const [showBubbles, setShowBubbles] = useState(() => {
+    const saved = localStorage.getItem('local-pilot-bubbles');
+    return saved !== null ? JSON.parse(saved) : true;
+  });
+
+  // Sync bubbles preference
+  useEffect(() => {
+    localStorage.setItem('local-pilot-bubbles', JSON.stringify(showBubbles));
+  }, [showBubbles]);
 
   const WELCOME_MESSAGE = { 
     role: 'assistant', 
@@ -176,6 +187,17 @@ function App() {
   const messagesEndRef = useRef(null);
   const scrollContainerRef = useRef(null);
   const currentChatIdRef = useRef(currentChatId);
+  const generationIdRef = useRef(0);
+  const activeGenerationRef = useRef(Promise.resolve()); // tracks the currently draining stream
+
+  const handleStop = () => {
+    generationIdRef.current++; // invalidate — the running loop will skip UI updates
+    setIsLoading(false);
+    // NOTE: we do NOT break the loop or call interruptGenerate.
+    // The old stream drains silently in the background via `continue`.
+    // activeGenerationRef still holds that promise, so the next
+    // generation call will await it before starting.
+  };
   const [chatToDelete, setChatToDelete] = useState(null);
 
   // Keep ref in sync with state so async loops always read the latest value
@@ -280,6 +302,12 @@ function App() {
     setChatToDelete(null);
   };
 
+  const confirmDeleteAll = () => {
+    localStorage.removeItem('local-pilot-chats');
+    localStorage.removeItem('local-pilot-current-id');
+    window.location.reload();
+  };
+
   const { scrollYProgress } = useScroll({ container: scrollContainerRef });
   const gradientOpacity = useTransform(scrollYProgress, [0, 1], [0, 1]);
 
@@ -376,6 +404,18 @@ function App() {
       return chat;
     }));
 
+    const genId = ++generationIdRef.current;
+
+    // Wait for any previous (draining) generation to finish
+    await activeGenerationRef.current;
+
+    // If another generation started while we were waiting, bail out
+    if (generationIdRef.current !== genId) {
+      setIsLoading(false);
+      return;
+    }
+
+    const genPromise = (async () => {
     try {
       const completion = await engine.chat.completions.create({
         messages: [SYSTEM_PROMPT, ...updatedMessages],
@@ -384,8 +424,8 @@ function App() {
 
       let currentResponse = '';
       for await (const chunk of completion) {
-        // STOP generation if user switched chats
-        if (currentChatIdRef.current !== activeChatId) break;
+        // If generation was cancelled, skip UI updates but let the engine drain
+        if (currentChatIdRef.current !== activeChatId || generationIdRef.current !== genId) continue;
 
         const content = chunk.choices[0]?.delta?.content || '';
         currentResponse += content;
@@ -409,13 +449,21 @@ function App() {
       }
     } catch (error) {
       console.error("Chat error:", error);
-      setMessages(prev => [
-        ...prev, 
-        { role: 'assistant', content: 'Sorry, I encountered an error generating the response.' }
-      ]);
+      if (generationIdRef.current === genId) {
+        setMessages(prev => [
+          ...prev, 
+          { role: 'assistant', content: 'Sorry, I encountered an error generating the response.' }
+        ]);
+      }
     } finally {
-      setIsLoading(false);
+      // Only reset loading if this generation is still the active one
+      if (generationIdRef.current === genId) {
+        setIsLoading(false);
+      }
     }
+    })();
+    activeGenerationRef.current = genPromise;
+    await genPromise;
   };
 
   const copyResponse = (content, index) => {
@@ -450,6 +498,17 @@ function App() {
       return chat;
     }));
 
+    const genId = ++generationIdRef.current;
+
+    // Wait for any previous (draining) generation to finish
+    await activeGenerationRef.current;
+
+    if (generationIdRef.current !== genId) {
+      setIsLoading(false);
+      return;
+    }
+
+    const genPromise = (async () => {
     try {
       const completion = await engine.chat.completions.create({
         messages: [SYSTEM_PROMPT, ...contextMessages],
@@ -458,8 +517,8 @@ function App() {
 
       let currentResponse = '';
       for await (const chunk of completion) {
-        // STOP if user switched chats
-        if (currentChatIdRef.current !== activeChatId) break;
+        // If generation was cancelled, skip UI updates but let the engine drain
+        if (currentChatIdRef.current !== activeChatId || generationIdRef.current !== genId) continue;
 
         const content = chunk.choices[0]?.delta?.content || '';
         currentResponse += content;
@@ -481,14 +540,22 @@ function App() {
       }
     } catch (error) {
       console.error("Regenerate error:", error);
-      setMessages(prev => {
-        const updated = [...prev];
-        updated[index] = { role: 'assistant', content: 'Sorry, I encountered an error regenerating the response.' };
-        return updated;
-      });
+      if (generationIdRef.current === genId) {
+        setMessages(prev => {
+          const updated = [...prev];
+          updated[index] = { role: 'assistant', content: 'Sorry, I encountered an error regenerating the response.' };
+          return updated;
+        });
+      }
     } finally {
-      setIsLoading(false);
+      // Only reset loading if this generation is still the active one
+      if (generationIdRef.current === genId) {
+        setIsLoading(false);
+      }
     }
+    })();
+    activeGenerationRef.current = genPromise;
+    await genPromise;
   };
 
   return (
@@ -556,6 +623,55 @@ function App() {
         )}
       </AnimatePresence>
 
+      {/* Delete All Confirmation Modal */}
+      <AnimatePresence>
+        {isDeletingAll && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsDeletingAll(false)}
+              className="absolute inset-0 bg-slate-950/80 backdrop-blur-md"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="relative glass-panel p-6 sm:p-8 rounded-3xl max-w-sm w-full shadow-2xl border border-white/10 overflow-hidden"
+            >
+              <div className="absolute inset-0 bg-gradient-to-br from-red-600/20 to-transparent pointer-events-none" />
+              
+              <div className="relative z-10 text-center space-y-4">
+                <div className="w-16 h-16 bg-red-500/20 border border-red-500/30 rounded-2xl flex items-center justify-center mx-auto mb-2">
+                  <AlertCircle className="w-8 h-8 text-red-400" />
+                </div>
+                
+                <h3 className="text-xl font-bold text-white">Clear All Chats?</h3>
+                <p className="text-slate-400 text-sm leading-relaxed">
+                  This will permanently delete your entire conversation history and reset all preferences. This action is irreversible.
+                </p>
+                
+                <div className="flex flex-col gap-2 pt-2">
+                  <button
+                    onClick={confirmDeleteAll}
+                    className="w-full px-4 py-3 rounded-xl bg-red-500 hover:bg-red-600 text-white font-semibold shadow-lg shadow-red-500/20 transition-all btn-creative-hover"
+                  >
+                    Yes, Delete Everything
+                  </button>
+                  <button
+                    onClick={() => setIsDeletingAll(false)}
+                    className="w-full px-4 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium transition-all"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       {/* Sidebar Content */}
       <motion.aside
         initial={false}
@@ -590,7 +706,10 @@ function App() {
 
         <div className="p-4">
           <button 
-            onClick={createNewChat}
+            onClick={() => {
+              createNewChat();
+              setActiveView('chat');
+            }}
             className={`w-full flex items-center justify-center gap-2 py-3 border rounded-xl transition-all font-medium btn-creative-hover ${
               theme === 'galaxy' 
                 ? 'bg-amber-500/10 hover:bg-amber-500/20 border-amber-500/30 text-amber-300' 
@@ -602,23 +721,24 @@ function App() {
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-4 pb-10 space-y-2 scrollbar-thin">
+        <div className="flex-1 overflow-y-auto px-4 space-y-2 scrollbar-thin">
           {chats.map(chat => (
             <div 
               key={chat.id}
               onClick={() => {
                 setCurrentChatId(chat.id);
+                setActiveView('chat');
                 if (window.innerWidth < 1024) setIsSidebarOpen(false);
               }}
               className={`group flex items-center justify-between p-3 rounded-xl cursor-pointer transition-all border ${
-                currentChatId === chat.id 
+                currentChatId === chat.id && activeView === 'chat'
                   ? (theme === 'galaxy' ? 'bg-amber-500/20 border-amber-500/40 text-amber-200' : 'bg-indigo-500/20 border-indigo-500/30 text-white')
                   : (theme === 'galaxy' ? 'hover:bg-amber-500/5 text-amber-500/50 border-transparent hover:text-amber-300/70' : 'hover:bg-slate-800/50 text-slate-400 border-transparent')
               }`}
             >
               <div className="flex items-center gap-3 overflow-hidden">
                 <MessageSquare className={`w-4 h-4 flex-shrink-0 ${
-                  currentChatId === chat.id 
+                  currentChatId === chat.id && activeView === 'chat'
                     ? (theme === 'galaxy' ? 'text-amber-400' : 'text-indigo-400') 
                     : 'text-slate-500'
                 }`} />
@@ -640,6 +760,25 @@ function App() {
             </div>
           )}
         </div>
+
+        <div className={`p-4 border-t transition-colors duration-500 ${
+          theme === 'galaxy' ? 'border-amber-500/20' : 'border-slate-700/50'
+        }`}>
+          <button 
+            onClick={() => {
+              setActiveView('settings');
+              if (window.innerWidth < 1024) setIsSidebarOpen(false);
+            }}
+            className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all border ${
+              activeView === 'settings'
+                ? (theme === 'galaxy' ? 'bg-amber-500/20 border-amber-500/40 text-amber-200' : 'bg-indigo-500/20 border-indigo-500/30 text-white')
+                : (theme === 'galaxy' ? 'hover:bg-amber-500/5 text-amber-500/50 border-transparent hover:text-amber-300/70' : 'hover:bg-slate-800/50 text-slate-400 border-transparent')
+            }`}
+          >
+            <SettingsIcon className={`w-5 h-5 ${activeView === 'settings' ? (theme === 'galaxy' ? 'text-amber-400' : 'text-indigo-400') : 'text-slate-500'}`} />
+            <span className="text-sm font-medium">Settings</span>
+          </button>
+        </div>
       </motion.aside>
 
       {/* Main Content Area Wrapper */}
@@ -651,7 +790,7 @@ function App() {
         />
 
         {/* Bubble Animation Background */}
-        {theme === 'default' && (
+        {theme === 'default' && showBubbles && (
           <div className="bubbles-container">
             {[...Array(8)].map((_, i) => (
               <div key={i} className="bubble"></div>
@@ -768,7 +907,7 @@ function App() {
       />
 
       {/* Bubble Animation Background */}
-      {theme === 'default' && (
+      {theme === 'default' && showBubbles && (
         <div className="bubbles-container">
           {[...Array(8)].map((_, i) => (
             <div key={i} className="bubble"></div>
@@ -812,216 +951,396 @@ function App() {
       </div>
       </div>
         
-        {/* Theme Toggle */}
-        <div className="flex gap-1 sm:gap-2 bg-slate-800/50 p-1 rounded-full border border-slate-700/50 backdrop-blur-md">
-          <button 
-            onClick={() => setTheme('default')}
-            className={`px-2 sm:px-3 py-1 rounded-full text-[10px] sm:text-xs font-medium transition-all ${theme === 'default' ? 'bg-indigo-500 text-white shadow-md shadow-indigo-500/30' : 'text-slate-400 hover:text-slate-200'}`}
-          >
-            Default
-          </button>
-          <button 
-            onClick={() => setTheme('galaxy')}
-            className={`px-2 sm:px-3 py-1 rounded-full text-[10px] sm:text-xs font-medium transition-all ${theme === 'galaxy' ? 'bg-gradient-to-r from-amber-500 to-yellow-600 text-black shadow-md shadow-amber-500/30' : 'text-slate-400 hover:text-amber-200'}`}
-          >
-            Galaxy
-          </button>
+        {/* Theme Toggle is now in settings, removing it from header for cleaner look if requested, or keep it. Actually, I'll keep it but also add it to settings. Or I can remove it to make the header cleaner. Let's remove it and add it to settings. */}
+        <div className="flex items-center gap-2">
+          {activeView === 'settings' && (
+            <button 
+              onClick={() => setActiveView('chat')}
+              className={`text-xs px-3 py-1.5 rounded-lg border transition-all ${
+                theme === 'galaxy' 
+                  ? 'border-amber-500/30 text-amber-400 hover:bg-amber-500/10' 
+                  : 'border-slate-700 text-slate-400 hover:bg-slate-800'
+              }`}
+            >
+              Back to Chat
+            </button>
+          )}
         </div>
       </header>
 
-      {/* Main Chat Area */}
+      {/* Main Content Area */}
       <main className="flex-1 overflow-hidden flex flex-col relative max-w-4xl w-full mx-auto p-2 sm:p-6">
         
-        {!isEngineReady && (
-          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center p-4 sm:p-6 bg-slate-900/80 backdrop-blur-sm">
-            <div className="glass-panel p-6 sm:p-8 rounded-2xl max-w-[90%] sm:max-w-md w-full text-center space-y-4 sm:space-y-6 shadow-2xl relative overflow-hidden">
-              <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/10 to-purple-500/10 z-0"></div>
-              
-              <div className="relative z-10">
-                {loadingProgress.error ? (
-                   <AlertCircle className="w-16 h-16 text-red-400 mx-auto mb-4" />
-                ) : (
-                  <Loader2 className="w-16 h-16 text-indigo-400 mx-auto mb-4 animate-spin" />
-                )}
-                
-                <h2 className="text-xl sm:text-2xl font-bold mb-2">
-                  {loadingProgress.error ? 'Initialization Failed' : 'Loading AI Model'}
-                </h2>
-                
-                <p className={`text-sm ${loadingProgress.error ? 'text-red-300' : 'text-slate-300'} mb-6`}>
-                  {loadingProgress.text}
-                </p>
+        <AnimatePresence mode="wait">
+          {activeView === 'chat' ? (
+            <motion.div 
+              key="chat-view"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              className="flex-1 flex flex-col overflow-hidden"
+            >
+              {!isEngineReady && (
+                <div className="absolute inset-0 z-20 flex flex-col items-center justify-center p-4 sm:p-6 bg-slate-900/80 backdrop-blur-sm">
+                  <div className="glass-panel p-6 sm:p-8 rounded-2xl max-w-[90%] sm:max-w-md w-full text-center space-y-4 sm:space-y-6 shadow-2xl relative overflow-hidden">
+                    <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/10 to-purple-500/10 z-0"></div>
+                    
+                    <div className="relative z-10">
+                      {loadingProgress.error ? (
+                        <AlertCircle className="w-16 h-16 text-red-400 mx-auto mb-4" />
+                      ) : (
+                        <Loader2 className="w-16 h-16 text-indigo-400 mx-auto mb-4 animate-spin" />
+                      )}
+                      
+                      <h2 className="text-xl sm:text-2xl font-bold mb-2">
+                        {loadingProgress.error ? 'Initialization Failed' : 'Loading AI Model'}
+                      </h2>
+                      
+                      <p className={`text-sm ${loadingProgress.error ? 'text-red-300' : 'text-slate-300'} mb-6`}>
+                        {loadingProgress.text}
+                      </p>
 
-                {!loadingProgress.error && (
-                  <div className="w-full bg-slate-800 rounded-full h-2.5 overflow-hidden">
-                    <div 
-                      className="bg-gradient-to-r from-indigo-500 to-purple-500 h-2.5 rounded-full transition-all duration-300 ease-out" 
-                      style={{ width: `${loadingProgress.progress}%` }}
-                    ></div>
+                      {!loadingProgress.error && (
+                        <div className="w-full bg-slate-800 rounded-full h-2.5 overflow-hidden">
+                          <div 
+                            className="bg-gradient-to-r from-indigo-500 to-purple-500 h-2.5 rounded-full transition-all duration-300 ease-out" 
+                            style={{ width: `${loadingProgress.progress}%` }}
+                          ></div>
+                        </div>
+                      )}
+                      
+                      {!loadingProgress.error && (
+                        <p className="text-xs text-slate-500 mt-4">
+                          This model runs entirely in your browser. The first load downloads the model files (~1GB) which will be cached for future visits.
+                        </p>
+                      )}
+                    </div>
                   </div>
-                )}
-                
-                {!loadingProgress.error && (
-                  <p className="text-xs text-slate-500 mt-4">
-                    This model runs entirely in your browser. The first load downloads the model files (~1GB) which will be cached for future visits.
-                  </p>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
+                </div>
+              )}
 
-        <div ref={scrollContainerRef} onScroll={handleScroll} className="flex-1 overflow-y-auto space-y-4 sm:space-y-6 pb-36 sm:pb-32 pr-1 sm:pr-2 scrollbar-thin relative z-10">
-          <AnimatePresence>
-            {messages.map((message, index) => (
-              <motion.div
-                initial={{ opacity: 0, y: 10, scale: 0.98 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                transition={{ duration: 0.3 }}
-                key={index}
-                className={`flex gap-2 sm:gap-4 max-w-[95%] sm:max-w-[85%] ${
-                  message.role === 'user' ? 'ml-auto flex-row-reverse' : 'mr-auto'
-                }`}
-              >
-                <div className={`flex-shrink-0 w-6 h-6 sm:w-8 sm:h-8 rounded-full flex items-center justify-center shadow-lg mt-1 sm:mt-0 ${
-                  message.role === 'user' 
-                    ? (theme === 'galaxy' ? 'bg-gradient-to-br from-amber-500 to-yellow-600 text-black' : 'bg-gradient-to-br from-indigo-500 to-purple-600 text-white')
-                    : 'bg-slate-700 border border-slate-600'
-                }`}>
-                  {message.role === 'user' ? (
-                    <User className={`w-3 h-3 sm:w-4 sm:h-4 ${theme === 'galaxy' ? 'text-black' : 'text-white'}`} />
-                  ) : (
-                    <Bot className={`w-3 h-3 sm:w-4 sm:h-4 ${theme === 'galaxy' ? 'text-amber-400' : 'text-indigo-300'}`} />
+              <div ref={scrollContainerRef} onScroll={handleScroll} className="flex-1 overflow-y-auto space-y-4 sm:space-y-6 pb-36 sm:pb-32 pr-1 sm:pr-2 scrollbar-thin relative z-10">
+                <AnimatePresence>
+                  {messages.map((message, index) => (
+                    <motion.div
+                      initial={{ opacity: 0, y: 10, scale: 0.98 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      transition={{ duration: 0.3 }}
+                      key={index}
+                      className={`flex gap-2 sm:gap-4 max-w-[95%] sm:max-w-[85%] ${
+                        message.role === 'user' ? 'ml-auto flex-row-reverse' : 'mr-auto'
+                      }`}
+                    >
+                      <div className={`flex-shrink-0 w-6 h-6 sm:w-8 sm:h-8 rounded-full flex items-center justify-center shadow-lg mt-1 sm:mt-0 ${
+                        message.role === 'user' 
+                          ? (theme === 'galaxy' ? 'bg-gradient-to-br from-amber-500 to-yellow-600 text-black' : 'bg-gradient-to-br from-indigo-500 to-purple-600 text-white')
+                          : 'bg-slate-700 border border-slate-600'
+                      }`}>
+                        {message.role === 'user' ? (
+                          <User className={`w-3 h-3 sm:w-4 sm:h-4 ${theme === 'galaxy' ? 'text-black' : 'text-white'}`} />
+                        ) : (
+                          <Bot className={`w-3 h-3 sm:w-4 sm:h-4 ${theme === 'galaxy' ? 'text-amber-400' : 'text-indigo-300'}`} />
+                        )}
+                      </div>
+                      
+                      <div className={`p-3 sm:p-4 rounded-2xl shadow-md min-w-0 ${
+                        message.role === 'user'
+                          ? (theme === 'galaxy' ? 'bg-gradient-to-br from-amber-500 to-yellow-600 text-black rounded-tr-sm' : 'message-bubble-user text-white rounded-tr-sm')
+                          : 'message-bubble-ai text-slate-200 rounded-tl-sm'
+                      }`}>
+                        <div className="text-sm leading-relaxed min-w-0 max-w-full overflow-x-auto break-words prose prose-invert">
+                          <ReactMarkdown
+                            remarkPlugins={[remarkGfm]}
+                            components={{
+                              code({node, inline, className, children, ...props}) {
+                                const match = /language-(\w+)/.exec(className || '')
+                                return !inline ? (
+                                  <CodeBlockWithCopy match={match} className={className} children={children} {...props} />
+                                ) : (
+                                  <code {...props} className={`${className || ''} bg-slate-800 px-1 py-0.5 rounded text-indigo-300 font-mono text-[0.9em] break-words`}>
+                                    {children}
+                                  </code>
+                                )
+                              },
+                              strong({children}) {
+                                return <strong className={`font-extrabold ${theme === 'galaxy' ? 'text-amber-400' : 'text-indigo-300'} tracking-wide`}>{children}</strong>
+                              },
+                              p({children}) {
+                                return <p className="mb-2 last:mb-0">{children}</p>
+                              },
+                              pre({children}) {
+                                return <pre className="bg-transparent p-0 m-0 overflow-visible">{children}</pre>
+                              }
+                            }}
+                          >
+                            {message.content}
+                          </ReactMarkdown>
+                        </div>
+                        {message.role === 'assistant' && message.content && (
+                          <div className="flex items-center gap-1 mt-2 -mb-1">
+                            <button
+                              onClick={() => copyResponse(message.content, index)}
+                              className="flex items-center gap-1 px-2 py-1 rounded-md text-xs text-slate-400 hover:text-white hover:bg-slate-700/50 transition-all"
+                              title="Copy response"
+                            >
+                              {copiedMessageId === index ? (
+                                <><Check className="w-3 h-3 text-emerald-400" /><span className="text-emerald-400">Copied</span></>
+                              ) : (
+                                <><Copy className="w-3 h-3" /><span>Copy</span></>
+                              )}
+                            </button>
+                            <button
+                              onClick={() => handleRegenerate(index)}
+                              disabled={isLoading}
+                              className="flex items-center gap-1 px-2 py-1 rounded-md text-xs text-slate-400 hover:text-white hover:bg-slate-700/50 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                              title="Regenerate response"
+                            >
+                              <RefreshCw className={`w-3 h-3 ${isLoading ? 'animate-spin' : ''}`} />
+                              <span>Regenerate</span>
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </motion.div>
+                  ))}
+                </AnimatePresence>
+                <div ref={messagesEndRef} />
+              </div>
+
+              {/* Input Area */}
+              <div className="absolute bottom-2 sm:bottom-6 left-2 sm:left-6 right-2 sm:right-6 lg:left-0 lg:right-0 z-20 flex flex-col items-center">
+                <AnimatePresence>
+                  {isLoading && (
+                    <motion.button
+                      key="stop-btn"
+                      initial={{ opacity: 0, y: 8, scale: 0.9 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 8, scale: 0.9 }}
+                      onClick={handleStop}
+                      className={`mb-3 flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium shadow-lg border backdrop-blur-md transition-all hover:scale-105 active:scale-95 ${
+                        theme === 'galaxy'
+                          ? 'bg-black/70 border-amber-500/40 text-amber-300 hover:bg-amber-500/10 hover:border-amber-400/60'
+                          : 'bg-slate-900/80 border-slate-600/60 text-slate-300 hover:bg-slate-800 hover:border-slate-500'
+                      }`}
+                    >
+                      <div className="w-3 h-3 rounded-sm bg-current flex-shrink-0" />
+                      Stop generating
+                    </motion.button>
                   )}
+                  {showScrollButton && !isLoading && (
+                    <motion.button
+                      key="scroll-btn"
+                      initial={{ opacity: 0, y: 10, scale: 0.9 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 10, scale: 0.9 }}
+                      onClick={scrollToBottom}
+                      className={`mb-3 sm:mb-4 w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center rounded-full shadow-lg border btn-creative-hover ${
+                        theme === 'galaxy' 
+                          ? 'bg-black/60 border-amber-500/30 text-amber-400' 
+                          : 'bg-slate-800 border-indigo-500/30 text-indigo-400'
+                      } backdrop-blur-md focus:outline-none focus:ring-2 focus:ring-opacity-50 ${theme === 'galaxy' ? 'focus:ring-amber-500' : 'focus:ring-indigo-500'}`}
+                      title="Scroll to bottom"
+                    >
+                      <ArrowDown className="w-5 h-5" />
+                    </motion.button>
+                  )}
+                </AnimatePresence>
+
+                <form 
+                  onSubmit={handleSubmit}
+                  className="glass-panel w-full p-2 rounded-2xl flex items-center gap-2 shadow-2xl transition-all duration-300"
+                >
+                  <textarea
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        handleSubmit(e);
+                      }
+                    }}
+                    placeholder={isEngineReady ? "Message Sukhna-AI..." : "Waiting for Sukhna-AI to load..."}
+                    disabled={!isEngineReady || isLoading}
+                    className="flex-1 bg-transparent border-0 focus:ring-0 focus:outline-none resize-none p-3 max-h-32 text-sm disabled:opacity-50 text-slate-200 placeholder-slate-500"
+                    rows={1}
+                  />
+                  <button
+                    type="submit"
+                    disabled={!input.trim() || !isEngineReady || isLoading}
+                    className={`p-3 disabled:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed rounded-xl flex-shrink-0 flex items-center justify-center btn-creative-hover ${
+                      theme === 'galaxy' 
+                        ? 'bg-gradient-to-r from-amber-500 to-yellow-600 text-black' 
+                        : 'bg-indigo-500 text-white'
+                    }`}
+                  >
+                    {isLoading ? (
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                    ) : (
+                      <Send className="w-5 h-5 group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
+                    )}
+                  </button>
+                </form>
+                <div className="text-center mt-2 w-full">
+                  <p className="text-[10px] sm:text-xs text-slate-500">
+                    Responses are generated locally and may be inaccurate.
+                  </p>
+                </div>
+              </div>
+            </motion.div>
+          ) : (
+            <motion.div 
+              key="settings-view"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              className="flex-1 overflow-y-auto pb-10 space-y-8 relative z-10 scrollbar-thin"
+            >
+              <div className="space-y-2">
+                <h2 className="text-2xl font-bold flex items-center gap-2">
+                  <SettingsIcon className={`w-6 h-6 ${theme === 'galaxy' ? 'text-amber-400' : 'text-indigo-400'}`} />
+                  Settings
+                </h2>
+                <p className="text-slate-400 text-sm">Manage your AI experience and preferences.</p>
+              </div>
+
+              {/* Appearance Section */}
+              <section className="glass-panel p-6 rounded-2xl space-y-4 border border-white/5">
+                <div className="flex items-center gap-3">
+                  <div className={`p-2 rounded-lg ${theme === 'galaxy' ? 'bg-amber-500/20 text-amber-400' : 'bg-indigo-500/20 text-indigo-400'}`}>
+                    <Sparkles className="w-5 h-5" />
+                  </div>
+                  <h3 className="font-semibold text-lg">Appearance</h3>
                 </div>
                 
-                <div className={`p-3 sm:p-4 rounded-2xl shadow-md min-w-0 ${
-                  message.role === 'user'
-                    ? (theme === 'galaxy' ? 'bg-gradient-to-br from-amber-500 to-yellow-600 text-black rounded-tr-sm' : 'message-bubble-user text-white rounded-tr-sm')
-                    : 'message-bubble-ai text-slate-200 rounded-tl-sm'
-                }`}>
-                  <div className="text-sm leading-relaxed min-w-0 max-w-full overflow-x-auto break-words prose prose-invert">
-                    <ReactMarkdown
-                      remarkPlugins={[remarkGfm]}
-                      components={{
-                        code({node, inline, className, children, ...props}) {
-                          const match = /language-(\w+)/.exec(className || '')
-                          return !inline ? (
-                            <CodeBlockWithCopy match={match} className={className} children={children} {...props} />
-                          ) : (
-                            <code {...props} className={`${className || ''} bg-slate-800 px-1 py-0.5 rounded text-indigo-300 font-mono text-[0.9em] break-words`}>
-                              {children}
-                            </code>
-                          )
-                        },
-                        strong({children}) {
-                          return <strong className={`font-extrabold ${theme === 'galaxy' ? 'text-amber-400' : 'text-indigo-300'} tracking-wide`}>{children}</strong>
-                        },
-                        p({children}) {
-                          return <p className="mb-2 last:mb-0">{children}</p>
-                        },
-                        pre({children}) {
-                          return <pre className="bg-transparent p-0 m-0 overflow-visible">{children}</pre>
-                        }
-                      }}
-                    >
-                      {message.content}
-                    </ReactMarkdown>
-                  </div>
-                  {/* Copy & Regenerate buttons for AI messages */}
-                  {message.role === 'assistant' && message.content && (
-                    <div className="flex items-center gap-1 mt-2 -mb-1">
-                      <button
-                        onClick={() => copyResponse(message.content, index)}
-                        className="flex items-center gap-1 px-2 py-1 rounded-md text-xs text-slate-400 hover:text-white hover:bg-slate-700/50 transition-all"
-                        title="Copy response"
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <button 
+                    onClick={() => setTheme('default')}
+                    className={`flex flex-col items-start p-4 rounded-xl border transition-all text-left gap-2 ${
+                      theme === 'default' 
+                        ? 'bg-indigo-500/20 border-indigo-500/50 text-indigo-100 shadow-lg shadow-indigo-500/10' 
+                        : 'border-slate-700/50 text-slate-400 hover:bg-slate-800/50'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between w-full">
+                      <span className="font-medium">Deep Space</span>
+                      {theme === 'default' && <Check className="w-4 h-4" />}
+                    </div>
+                    <span className="text-xs opacity-70">A clean, focused interface with deep blue accents and subtle bubble animations.</span>
+                  </button>
+
+                  <button 
+                    onClick={() => setTheme('galaxy')}
+                    className={`flex flex-col items-start p-4 rounded-xl border transition-all text-left gap-2 ${
+                      theme === 'galaxy' 
+                        ? 'bg-amber-500/10 border-amber-500/40 text-amber-200 shadow-lg shadow-amber-500/10' 
+                        : 'border-slate-700/50 text-slate-400 hover:bg-slate-800/50'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between w-full">
+                      <span className="font-medium">Galaxy Orbit</span>
+                      {theme === 'galaxy' && <Check className="w-4 h-4 text-amber-400" />}
+                    </div>
+                    <span className="text-xs opacity-70">An immersive celestial experience with a rotating solar system and starfield tail.</span>
+                  </button>
+                </div>
+
+                {theme === 'default' && (
+                  <div className="pt-4 border-t border-white/5 mt-4">
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <label className="text-sm font-medium text-slate-200">Background Bubbles</label>
+                        <p className="text-xs text-slate-500">Toggle the rising bubble animations in the Deep Space theme.</p>
+                      </div>
+                      <button 
+                        onClick={() => setShowBubbles(!showBubbles)}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${showBubbles ? 'bg-indigo-500' : 'bg-slate-700'}`}
                       >
-                        {copiedMessageId === index ? (
-                          <><Check className="w-3 h-3 text-emerald-400" /><span className="text-emerald-400">Copied</span></>
-                        ) : (
-                          <><Copy className="w-3 h-3" /><span>Copy</span></>
-                        )}
-                      </button>
-                      <button
-                        onClick={() => handleRegenerate(index)}
-                        disabled={isLoading}
-                        className="flex items-center gap-1 px-2 py-1 rounded-md text-xs text-slate-400 hover:text-white hover:bg-slate-700/50 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-                        title="Regenerate response"
-                      >
-                        <RefreshCw className={`w-3 h-3 ${isLoading ? 'animate-spin' : ''}`} />
-                        <span>Regenerate</span>
+                        <span 
+                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${showBubbles ? 'translate-x-6' : 'translate-x-1'}`}
+                        />
                       </button>
                     </div>
-                  )}
+                  </div>
+                )}
+              </section>
+
+              {/* AI Engine Info */}
+              <section className="glass-panel p-6 rounded-2xl space-y-4 border border-white/5">
+                <div className="flex items-center gap-3">
+                  <div className={`p-2 rounded-lg ${theme === 'galaxy' ? 'bg-amber-500/20 text-amber-400' : 'bg-indigo-500/20 text-indigo-400'}`}>
+                    <Globe className="w-5 h-5" />
+                  </div>
+                  <h3 className="font-semibold text-lg">AI Engine</h3>
                 </div>
-              </motion.div>
-            ))}
-          </AnimatePresence>
-          <div ref={messagesEndRef} />
-        </div>
+                
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between py-2 border-b border-white/5">
+                    <span className="text-sm text-slate-300">Active Model</span>
+                    <span className={`text-xs font-mono px-2 py-1 rounded ${theme === 'galaxy' ? 'bg-amber-500/20 text-amber-200' : 'bg-slate-800 text-indigo-300'}`}>
+                      {SELECTED_MODEL}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between py-2 border-b border-white/5">
+                    <span className="text-sm text-slate-300">Device Status</span>
+                    <div className="flex items-center gap-2">
+                      <span className="relative flex h-2 w-2">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                      </span>
+                      <span className="text-xs text-emerald-400">WebGPU Accelerated</span>
+                    </div>
+                  </div>
+                  <div className="p-3 bg-slate-800/40 rounded-xl text-xs text-slate-400 leading-relaxed">
+                    Sukhna-AI runs locally on your machine using the MLC LLM engine. No data is sent to external servers, ensuring 100% privacy and offline capability.
+                  </div>
+                </div>
+              </section>
 
-        {/* Input Area */}
-        <div className="absolute bottom-2 sm:bottom-6 left-2 sm:left-6 right-2 sm:right-6 lg:left-0 lg:right-0 z-20 flex flex-col items-end">
-          {/* Scroll to Bottom Button */}
-          <AnimatePresence>
-            {showScrollButton && (
-              <motion.button
-                initial={{ opacity: 0, y: 10, scale: 0.9 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: 10, scale: 0.9 }}
-                onClick={scrollToBottom}
-                className={`mb-3 sm:mb-4 mr-0 sm:mr-2 w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center rounded-full shadow-lg border btn-creative-hover ${
-                  theme === 'galaxy' 
-                    ? 'bg-black/60 border-amber-500/30 text-amber-400' 
-                    : 'bg-slate-800 border-indigo-500/30 text-indigo-400'
-                } backdrop-blur-md focus:outline-none focus:ring-2 focus:ring-opacity-50 ${theme === 'galaxy' ? 'focus:ring-amber-500' : 'focus:ring-indigo-500'}`}
-                title="Scroll to bottom"
-              >
-                <ArrowDown className="w-5 h-5" />
-              </motion.button>
-            )}
-          </AnimatePresence>
+              {/* Data Management */}
+              <section className="glass-panel p-6 rounded-2xl space-y-4 border border-white/5">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-red-500/20 text-red-400">
+                    <Trash2 className="w-5 h-5" />
+                  </div>
+                  <h3 className="font-semibold text-lg">Data Management</h3>
+                </div>
+                
+                <div className="space-y-4">
+                  <p className="text-sm text-slate-400">Clear your local storage to remove all chats and reset your preferences.</p>
+                  <button 
+                    onClick={() => setIsDeletingAll(true)}
+                    className="px-4 py-2 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 rounded-xl text-sm font-medium transition-all"
+                  >
+                    Clear All Chat History
+                  </button>
+                </div>
+              </section>
 
-          <form 
-            onSubmit={handleSubmit}
-            className="glass-panel w-full p-2 rounded-2xl flex items-center gap-2 shadow-2xl transition-all duration-300"
-          >
-            <textarea
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  handleSubmit(e);
-                }
-              }}
-              placeholder={isEngineReady ? "Message Sukhna-AI..." : "Waiting for Sukhna-AI to load..."}
-              disabled={!isEngineReady || isLoading}
-              className="flex-1 bg-transparent border-0 focus:ring-0 focus:outline-none resize-none p-3 max-h-32 text-sm disabled:opacity-50 text-slate-200 placeholder-slate-500"
-              rows={1}
-            />
-            <button
-              type="submit"
-              disabled={!input.trim() || !isEngineReady || isLoading}
-              className={`p-3 disabled:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed rounded-xl flex-shrink-0 flex items-center justify-center btn-creative-hover ${
-                theme === 'galaxy' 
-                  ? 'bg-gradient-to-r from-amber-500 to-yellow-600 text-black' 
-                  : 'bg-indigo-500 text-white'
-              }`}
-            >
-              {isLoading ? (
-                <Loader2 className="w-5 h-5 animate-spin" />
-              ) : (
-                <Send className="w-5 h-5 group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
-              )}
-            </button>
-          </form>
-          <div className="text-center mt-2 w-full">
-            <p className="text-[10px] sm:text-xs text-slate-500">
-              Responses are generated locally and may be inaccurate.
-            </p>
-          </div>
-        </div>
+              {/* About Section */}
+              <section className="glass-panel p-6 rounded-2xl space-y-4 border border-white/5">
+                <div className="flex items-center gap-3">
+                  <div className={`p-2 rounded-lg ${theme === 'galaxy' ? 'bg-amber-500/20 text-amber-400' : 'bg-indigo-500/20 text-indigo-400'}`}>
+                    <Info className="w-5 h-5" />
+                  </div>
+                  <h3 className="font-semibold text-lg">About</h3>
+                </div>
+                
+                <div className="space-y-4 text-sm text-slate-300 leading-relaxed">
+                  <p>
+                    Sukhna-AI is a visionary project created by <strong className={theme === 'galaxy' ? 'text-amber-400' : 'text-indigo-400'}>Lucky Pawar</strong> and <strong className={theme === 'galaxy' ? 'text-amber-400' : 'text-indigo-400'}>Sahil Chadha</strong>.
+                  </p>
+                  <p>
+                    This application demonstrates the power of modern web technologies, enabling LLMs to run directly in the browser with high performance and zero latency, while maintaining absolute user privacy.
+                  </p>
+                  <div className="pt-2 text-xs text-slate-500 flex items-center justify-between">
+                    <span>Version 1.2.0</span>
+                    <span>Built with React & WebGPU</span>
+                  </div>
+                </div>
+              </section>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </main>
     </div>
   </div>
