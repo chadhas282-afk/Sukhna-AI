@@ -1,8 +1,0 @@
-todo:
-1. add meta data in the head tag of index.html file
-
-features:
-
-
-2. add flora and fauna themes
-3. add a light/white theme 

@@ -6,6 +6,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import avatarImg from './assets/sukhna-avatar.png';
 
 const SELECTED_MODEL = "Llama-3.2-1B-Instruct-q4f32_1-MLC"; // Small model for better browser performance
 
@@ -192,6 +193,7 @@ function App() {
   const [loadingProgress, setLoadingProgress] = useState({ text: 'Initializing...', progress: 0 });
   const [engine, setEngine] = useState(null);
   const [copiedMessageId, setCopiedMessageId] = useState(null);
+  const [regeneratingIndex, setRegeneratingIndex] = useState(null);
   const [showScrollButton, setShowScrollButton] = useState(false);
   const messagesEndRef = useRef(null);
   const scrollContainerRef = useRef(null);
@@ -469,6 +471,7 @@ function App() {
       // Only reset loading if this generation is still the active one
       if (generationIdRef.current === genId) {
         setIsLoading(false);
+        setRegeneratingIndex(null);
       }
     }
     })();
@@ -499,6 +502,7 @@ function App() {
     messagesWithPlaceholder[index] = { role: 'assistant', content: '' };
     setMessages(messagesWithPlaceholder);
     setIsLoading(true);
+    setRegeneratingIndex(index);
 
     // Sync placeholder to history immediately
     setChats(prev => prev.map(chat => {
@@ -561,6 +565,7 @@ function App() {
       // Only reset loading if this generation is still the active one
       if (generationIdRef.current === genId) {
         setIsLoading(false);
+        setRegeneratingIndex(null);
       }
     }
     })();
@@ -571,7 +576,7 @@ function App() {
   return (
     <div className={`h-[100dvh] w-screen overflow-hidden flex font-sans relative ${
       theme === 'galaxy' ? 'selection:bg-amber-500/30 galaxy-cursor bg-slate-900 text-white'
-      : theme === 'flora' ? 'selection:bg-blue-500/30 text-white'
+      : theme === 'flora' ? 'selection:bg-blue-500/30 flora-cursor text-white'
       : theme === 'light' ? 'selection:bg-indigo-300/40 bg-gradient-to-br from-slate-50 via-white to-slate-100 text-slate-800'
       : 'selection:bg-indigo-500/30 bg-slate-900 text-white'
     }`}>
@@ -1014,8 +1019,8 @@ function App() {
           </button>
           
           <div className="flex items-center gap-2 sm:gap-3">
-            <div className={`${theme === 'galaxy' ? 'bg-amber-500/20 border-amber-500/30' : theme === 'flora' ? 'bg-blue-500/20 border-blue-500/30' : theme === 'light' ? 'bg-indigo-500/15 border-indigo-300/40' : 'bg-indigo-500/20 border-indigo-500/30'} p-1.5 sm:p-2 rounded-xl border`}>
-              <Sparkles className={`w-5 h-5 sm:w-6 sm:h-6 ${theme === 'galaxy' ? 'text-amber-400' : theme === 'flora' ? 'text-blue-500' : theme === 'light' ? 'text-indigo-500' : 'text-indigo-400'}`} />
+            <div className={`${theme === 'galaxy' ? 'bg-amber-500/20 border-amber-500/30' : theme === 'flora' ? 'bg-blue-500/20 border-blue-500/30' : theme === 'light' ? 'bg-indigo-500/15 border-indigo-300/40' : 'bg-indigo-500/20 border-indigo-500/30'} p-1 sm:p-1.5 rounded-xl border overflow-hidden`}>
+              <img src={avatarImg} alt="Sukhna-AI" className="w-6 h-6 sm:w-8 sm:h-8 object-cover" />
             </div>
           <div>
             <h1 className={`text-lg sm:text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r ${theme === 'galaxy' ? 'from-amber-400 to-yellow-200' : theme === 'flora' ? 'from-blue-600 to-blue-400' : theme === 'light' ? 'from-indigo-600 to-purple-500' : 'from-indigo-400 to-purple-400'}`}>
@@ -1076,9 +1081,81 @@ function App() {
                     
                     <div className="relative z-10">
                       {loadingProgress.error ? (
-                        <AlertCircle className="w-16 h-16 text-red-400 mx-auto mb-4" />
+                        <div className="relative w-24 h-24 mx-auto mb-6">
+                          <img src={avatarImg} alt="Error" className="w-full h-full object-cover rounded-2xl grayscale opacity-50" />
+                          <div className="absolute inset-0 flex items-center justify-center">
+                            <AlertCircle className="w-12 h-12 text-red-400" />
+                          </div>
+                        </div>
                       ) : (
-                        <Loader2 className="w-16 h-16 text-indigo-400 mx-auto mb-4 animate-spin" />
+                        <div className="relative w-36 h-36 mx-auto mb-6">
+                          {/* Ambient glow that grows with progress */}
+                          <div 
+                            className="absolute inset-0 rounded-full blur-2xl transition-all duration-500"
+                            style={{ 
+                              background: `radial-gradient(circle, rgba(99,102,241,${loadingProgress.progress / 200}) 0%, transparent 70%)`,
+                              transform: `scale(${1 + loadingProgress.progress / 200})`
+                            }} 
+                          />
+
+                          {/* The image container with border */}
+                          <div className="relative w-full h-full rounded-3xl overflow-hidden border border-indigo-500/20 shadow-2xl shadow-indigo-500/10 bg-slate-900">
+                            
+                            {/* Greyscale / dimmed base layer (always visible) */}
+                            <img 
+                              src={avatarImg} 
+                              alt="Sukhna-AI base" 
+                              className="absolute inset-0 w-full h-full object-cover grayscale opacity-20" 
+                            />
+                            
+                            {/* Revealed full-colour layer, clips from bottom up with progress */}
+                            <div
+                              className="absolute inset-0 overflow-hidden transition-all duration-700 ease-out"
+                              style={{ 
+                                clipPath: `inset(${100 - loadingProgress.progress}% 0 0 0)`,
+                              }}
+                            >
+                              <img 
+                                src={avatarImg} 
+                                alt="Sukhna-AI" 
+                                className="w-full h-full object-cover" 
+                              />
+                            </div>
+
+                            {/* Animated scan-line at the reveal boundary */}
+                            {loadingProgress.progress < 100 && loadingProgress.progress > 0 && (
+                              <motion.div
+                                className="absolute left-0 right-0 h-[3px] pointer-events-none"
+                                style={{ top: `${100 - loadingProgress.progress}%` }}
+                                animate={{ opacity: [0.6, 1, 0.6] }}
+                                transition={{ duration: 0.8, repeat: Infinity }}
+                              >
+                                <div className="w-full h-full bg-gradient-to-r from-transparent via-indigo-400 to-transparent" />
+                                <div className="absolute inset-x-0 -top-2 h-4 bg-indigo-500/15 blur-sm" />
+                              </motion.div>
+                            )}
+
+                            {/* Completion flash */}
+                            {loadingProgress.progress >= 100 && (
+                              <motion.div
+                                className="absolute inset-0 bg-indigo-400/30 rounded-3xl"
+                                initial={{ opacity: 1 }}
+                                animate={{ opacity: 0 }}
+                                transition={{ duration: 1, ease: "easeOut" }}
+                              />
+                            )}
+                          </div>
+
+                          {/* Progress percentage badge */}
+                          <motion.div 
+                            className="absolute -bottom-3 left-1/2 -translate-x-1/2 bg-indigo-600 text-white text-[10px] font-bold px-2.5 py-0.5 rounded-full shadow-lg shadow-indigo-500/30 tabular-nums"
+                            initial={{ opacity: 0, y: 4 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: 0.5 }}
+                          >
+                            {loadingProgress.progress}%
+                          </motion.div>
+                        </div>
                       )}
                       
                       <h2 className="text-xl sm:text-2xl font-bold mb-2">
@@ -1128,7 +1205,7 @@ function App() {
                         {message.role === 'user' ? (
                           <User className={`w-3 h-3 sm:w-4 sm:h-4 ${theme === 'galaxy' ? 'text-black' : 'text-white'}`} />
                         ) : (
-                          <Bot className={`w-3 h-3 sm:w-4 sm:h-4 ${theme === 'galaxy' ? 'text-amber-400' : theme === 'light' ? 'text-indigo-400' : 'text-indigo-300'}`} />
+                          <img src={avatarImg} alt="AI" className="w-full h-full object-cover" />
                         )}
                       </div>
                       
@@ -1205,7 +1282,7 @@ function App() {
                               className="flex items-center gap-1 px-2 py-1 rounded-md text-xs text-slate-400 hover:text-white hover:bg-slate-700/50 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                               title="Regenerate response"
                             >
-                              <RefreshCw className={`w-3 h-3 ${isLoading ? 'animate-spin' : ''}`} />
+                              <RefreshCw className={`w-3 h-3 ${regeneratingIndex === index ? 'animate-spin' : ''}`} />
                               <span>Regenerate</span>
                             </button>
                           </div>
