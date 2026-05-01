@@ -167,11 +167,20 @@ function App() {
     const saved = localStorage.getItem('local-pilot-bubbles');
     return saved !== null ? JSON.parse(saved) : true;
   });
+  const [showPetals, setShowPetals] = useState(() => {
+    const saved = localStorage.getItem('local-pilot-petals');
+    return saved !== null ? JSON.parse(saved) : true;
+  });
 
   // Sync bubbles preference
   useEffect(() => {
     localStorage.setItem('local-pilot-bubbles', JSON.stringify(showBubbles));
   }, [showBubbles]);
+
+  // Sync petals preference
+  useEffect(() => {
+    localStorage.setItem('local-pilot-petals', JSON.stringify(showPetals));
+  }, [showPetals]);
 
   const WELCOME_MESSAGE = { 
     role: 'assistant', 
@@ -310,6 +319,7 @@ function App() {
 
   const { scrollYProgress } = useScroll({ container: scrollContainerRef });
   const gradientOpacity = useTransform(scrollYProgress, [0, 1], [0, 1]);
+  const floraGradient = useTransform(scrollYProgress, [0, 1], ["0%", "100%"]);
 
   const scrollToBottom = () => {
     if (scrollContainerRef.current) {
@@ -559,7 +569,24 @@ function App() {
   };
 
   return (
-    <div className={`h-[100dvh] w-screen overflow-hidden bg-slate-900 text-white flex font-sans relative ${theme === 'galaxy' ? 'selection:bg-amber-500/30 galaxy-cursor' : 'selection:bg-indigo-500/30'}`}>
+    <div className={`h-[100dvh] w-screen overflow-hidden flex font-sans relative ${
+      theme === 'galaxy' ? 'selection:bg-amber-500/30 galaxy-cursor bg-slate-900 text-white'
+      : theme === 'flora' ? 'selection:bg-blue-500/30 text-white'
+      : theme === 'light' ? 'selection:bg-indigo-300/40 bg-gradient-to-br from-slate-50 via-white to-slate-100 text-slate-800'
+      : 'selection:bg-indigo-500/30 bg-slate-900 text-white'
+    }`}>
+      {/* Flora Theme Background Layer */}
+      {theme === 'flora' && (
+        <motion.div 
+          className="absolute inset-0 z-0"
+          style={{ 
+            background: `linear-gradient(180deg, #ffffff 0%, #e0f2fe 50%, #6495ed 100%)`,
+            backgroundSize: '100% 200%',
+            backgroundPositionY: floraGradient
+          }}
+        />
+      )}
+
       
       {/* Sidebar Overlay for Mobile */}
       <AnimatePresence>
@@ -684,20 +711,24 @@ function App() {
         className={`fixed lg:relative top-0 left-0 h-full z-50 flex flex-col overflow-hidden shadow-2xl transition-colors duration-500 ${
           theme === 'galaxy' 
             ? 'bg-black/60 backdrop-blur-xl border-r border-amber-500/20' 
+            : theme === 'flora'
+            ? 'flora-glass border-r border-blue-500/20'
+            : theme === 'light'
+            ? 'light-glass border-r border-slate-200/60'
             : 'glass-panel border-r border-slate-700/50'
         }`}
       >
         <div className={`p-6 border-b flex items-center justify-between transition-colors duration-500 ${
-          theme === 'galaxy' ? 'border-amber-500/20' : 'border-slate-700/50'
+          theme === 'galaxy' ? 'border-amber-500/20' : theme === 'flora' ? 'border-blue-500/10' : theme === 'light' ? 'border-slate-200/60' : 'border-slate-700/50'
         }`}>
           <h2 className="font-bold text-lg flex items-center gap-2">
-            <MessageSquare className={`w-5 h-5 ${theme === 'galaxy' ? 'text-amber-400' : 'text-indigo-400'}`} />
-            <span className={theme === 'galaxy' ? 'text-amber-200' : 'text-slate-200'}>History</span>
+            <MessageSquare className={`w-5 h-5 ${theme === 'galaxy' ? 'text-amber-400' : theme === 'flora' ? 'text-blue-600' : theme === 'light' ? 'text-indigo-500' : 'text-indigo-400'}`} />
+            <span className={theme === 'galaxy' ? 'text-amber-200' : theme === 'flora' ? 'text-blue-900' : theme === 'light' ? 'text-slate-700' : 'text-slate-200'}>History</span>
           </h2>
           <button 
             onClick={() => setIsSidebarOpen(false)}
             className={`p-2 rounded-lg lg:hidden transition-colors ${
-              theme === 'galaxy' ? 'hover:bg-amber-500/10 text-amber-400' : 'hover:bg-slate-800 text-slate-400'
+              theme === 'galaxy' ? 'hover:bg-amber-500/10 text-amber-400' : theme === 'flora' ? 'hover:bg-blue-500/10 text-blue-600' : theme === 'light' ? 'hover:bg-slate-100 text-slate-500' : 'hover:bg-slate-800 text-slate-400'
             }`}
           >
             <X className="w-5 h-5" />
@@ -713,6 +744,10 @@ function App() {
             className={`w-full flex items-center justify-center gap-2 py-3 border rounded-xl transition-all font-medium btn-creative-hover ${
               theme === 'galaxy' 
                 ? 'bg-amber-500/10 hover:bg-amber-500/20 border-amber-500/30 text-amber-300' 
+                : theme === 'flora'
+                ? 'bg-blue-500/10 hover:bg-blue-500/20 border-blue-500/30 text-blue-700'
+                : theme === 'light'
+                ? 'bg-indigo-500/10 hover:bg-indigo-500/15 border-indigo-300/50 text-indigo-600'
                 : 'bg-indigo-500/10 hover:bg-indigo-500/20 border-indigo-500/30 text-indigo-300'
             }`}
           >
@@ -732,14 +767,14 @@ function App() {
               }}
               className={`group flex items-center justify-between p-3 rounded-xl cursor-pointer transition-all border ${
                 currentChatId === chat.id && activeView === 'chat'
-                  ? (theme === 'galaxy' ? 'bg-amber-500/20 border-amber-500/40 text-amber-200' : 'bg-indigo-500/20 border-indigo-500/30 text-white')
-                  : (theme === 'galaxy' ? 'hover:bg-amber-500/5 text-amber-500/50 border-transparent hover:text-amber-300/70' : 'hover:bg-slate-800/50 text-slate-400 border-transparent')
+                  ? (theme === 'galaxy' ? 'bg-amber-500/20 border-amber-500/40 text-amber-200' : theme === 'flora' ? 'bg-blue-500/20 border-blue-500/30 text-blue-900' : theme === 'light' ? 'bg-indigo-100 border-indigo-300/60 text-indigo-800' : 'bg-indigo-500/20 border-indigo-500/30 text-white')
+                  : (theme === 'galaxy' ? 'hover:bg-amber-500/5 text-amber-500/50 border-transparent hover:text-amber-300/70' : theme === 'flora' ? 'hover:bg-blue-500/10 text-blue-600/70 border-transparent hover:text-blue-700' : theme === 'light' ? 'hover:bg-slate-100 text-slate-500 border-transparent hover:text-slate-700' : 'hover:bg-slate-800/50 text-slate-400 border-transparent')
               }`}
             >
               <div className="flex items-center gap-3 overflow-hidden">
                 <MessageSquare className={`w-4 h-4 flex-shrink-0 ${
                   currentChatId === chat.id && activeView === 'chat'
-                    ? (theme === 'galaxy' ? 'text-amber-400' : 'text-indigo-400') 
+                    ? (theme === 'galaxy' ? 'text-amber-400' : theme === 'flora' ? 'text-blue-600' : theme === 'light' ? 'text-indigo-500' : 'text-indigo-400') 
                     : 'text-slate-500'
                 }`} />
                 <span className="truncate text-sm font-medium">{chat.title}</span>
@@ -762,7 +797,7 @@ function App() {
         </div>
 
         <div className={`p-4 border-t transition-colors duration-500 ${
-          theme === 'galaxy' ? 'border-amber-500/20' : 'border-slate-700/50'
+          theme === 'galaxy' ? 'border-amber-500/20' : theme === 'light' ? 'border-slate-200/60' : 'border-slate-700/50'
         }`}>
           <button 
             onClick={() => {
@@ -771,11 +806,17 @@ function App() {
             }}
             className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all border ${
               activeView === 'settings'
-                ? (theme === 'galaxy' ? 'bg-amber-500/20 border-amber-500/40 text-amber-200' : 'bg-indigo-500/20 border-indigo-500/30 text-white')
-                : (theme === 'galaxy' ? 'hover:bg-amber-500/5 text-amber-500/50 border-transparent hover:text-amber-300/70' : 'hover:bg-slate-800/50 text-slate-400 border-transparent')
+                ? (theme === 'galaxy' ? 'bg-amber-500/20 border-amber-500/40 text-amber-200' : theme === 'flora' ? 'bg-blue-500/20 border-blue-500/30 text-blue-900' : theme === 'light' ? 'bg-indigo-100 border-indigo-300/60 text-indigo-800' : 'bg-indigo-500/20 border-indigo-500/30 text-white')
+                : (theme === 'galaxy' 
+                    ? 'hover:bg-amber-500/5 text-amber-500/50 border-transparent hover:text-amber-300/70' 
+                    : theme === 'flora'
+                    ? 'hover:bg-blue-500/10 text-blue-600 border-transparent hover:text-blue-800'
+                    : theme === 'light'
+                    ? 'hover:bg-slate-100 text-slate-500 border-transparent hover:text-slate-700'
+                    : 'hover:bg-slate-800/50 text-slate-400 border-transparent')
             }`}
           >
-            <SettingsIcon className={`w-5 h-5 ${activeView === 'settings' ? (theme === 'galaxy' ? 'text-amber-400' : 'text-indigo-400') : 'text-slate-500'}`} />
+            <SettingsIcon className={`w-5 h-5 ${activeView === 'settings' ? (theme === 'galaxy' ? 'text-amber-400' : theme === 'flora' ? 'text-blue-600' : theme === 'light' ? 'text-indigo-500' : 'text-indigo-400') : theme === 'light' ? 'text-slate-400' : 'text-slate-500'}`} />
             <span className="text-sm font-medium">Settings</span>
           </button>
         </div>
@@ -796,6 +837,25 @@ function App() {
               <div key={i} className="bubble"></div>
             ))}
           </div>
+        )}
+
+        {/* Flora Petal Shower */}
+        {theme === 'flora' && showPetals && (
+          <>
+            <div className="petals-container">
+              {[...Array(12)].map((_, i) => (
+                <div key={i} className="petal"></div>
+              ))}
+            </div>
+            <div className="flowers-backdrop">
+              {[...Array(10)].map((_, i) => (
+                <div key={i} className="flower-unit" style={{ animationDelay: `${i * 0.4}s` }}>
+                  <div className="flower-head"></div>
+                  <div className="flower-stem"></div>
+                </div>
+              ))}
+            </div>
+          </>
         )}
 
       {/* Solar System Background */}
@@ -915,26 +975,53 @@ function App() {
         </div>
       )}
 
+      {/* Flora Petal Shower */}
+      {theme === 'flora' && showPetals && (
+        <>
+          <div className="petals-container">
+            {[...Array(12)].map((_, i) => (
+              <div key={i} className="petal"></div>
+            ))}
+          </div>
+          <div className="flowers-backdrop">
+            {[...Array(8)].map((_, i) => (
+              <div key={i} className="flower-unit" style={{ animationDelay: `${i * 0.5}s` }}>
+                <div className="flower-head"></div>
+                <div className="flower-stem"></div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
       {/* Header */}
-      <header className="glass-panel sticky top-0 z-30 px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between shadow-lg gap-2">
+      <header className={`${theme === 'flora' ? 'flora-glass border-b border-blue-500/10' : theme === 'light' ? 'light-glass border-b border-slate-200/50' : 'glass-panel'} sticky top-0 z-30 px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between shadow-lg gap-2`}>
         <div className="flex items-center gap-2 sm:gap-4">
           <button 
             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-            className="p-2 hover:bg-slate-800/50 rounded-xl border border-slate-700/50 text-slate-400 hover:text-white transition-all flex-shrink-0"
+            className={`p-2 rounded-xl border transition-all flex-shrink-0 ${
+              theme === 'galaxy' 
+                ? 'hover:bg-slate-800/50 border-slate-700/50 text-slate-400 hover:text-white' 
+                : theme === 'flora'
+                ? 'hover:bg-blue-500/10 border-blue-500/20 text-blue-600'
+                : theme === 'light'
+                ? 'hover:bg-slate-100 border-slate-200 text-slate-500 hover:text-slate-800'
+                : 'hover:bg-slate-800/50 border-slate-700/50 text-slate-400 hover:text-white'
+            }`}
             title="Toggle Sidebar"
           >
             <PanelLeft className={`w-5 h-5 transition-transform ${isSidebarOpen ? 'rotate-180' : ''}`} />
           </button>
           
           <div className="flex items-center gap-2 sm:gap-3">
-            <div className={`${theme === 'galaxy' ? 'bg-amber-500/20 border-amber-500/30' : 'bg-indigo-500/20 border-indigo-500/30'} p-1.5 sm:p-2 rounded-xl border`}>
-              <Sparkles className={`w-5 h-5 sm:w-6 sm:h-6 ${theme === 'galaxy' ? 'text-amber-400' : 'text-indigo-400'}`} />
+            <div className={`${theme === 'galaxy' ? 'bg-amber-500/20 border-amber-500/30' : theme === 'flora' ? 'bg-blue-500/20 border-blue-500/30' : theme === 'light' ? 'bg-indigo-500/15 border-indigo-300/40' : 'bg-indigo-500/20 border-indigo-500/30'} p-1.5 sm:p-2 rounded-xl border`}>
+              <Sparkles className={`w-5 h-5 sm:w-6 sm:h-6 ${theme === 'galaxy' ? 'text-amber-400' : theme === 'flora' ? 'text-blue-500' : theme === 'light' ? 'text-indigo-500' : 'text-indigo-400'}`} />
             </div>
           <div>
-            <h1 className={`text-lg sm:text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r ${theme === 'galaxy' ? 'from-amber-400 to-yellow-200' : 'from-indigo-400 to-purple-400'}`}>
+            <h1 className={`text-lg sm:text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r ${theme === 'galaxy' ? 'from-amber-400 to-yellow-200' : theme === 'flora' ? 'from-blue-600 to-blue-400' : theme === 'light' ? 'from-indigo-600 to-purple-500' : 'from-indigo-400 to-purple-400'}`}>
               Sukhna-AI
             </h1>
-            <p className="text-[10px] sm:text-xs text-slate-400 flex items-center gap-1.5">
+            <p className={`text-[10px] sm:text-xs flex items-center gap-1.5 ${theme === 'light' ? 'text-slate-500' : 'text-slate-400'}`}>
               <span className="relative flex h-2 w-2">
                 {isEngineReady ? (
                   <>
@@ -959,6 +1046,8 @@ function App() {
               className={`text-xs px-3 py-1.5 rounded-lg border transition-all ${
                 theme === 'galaxy' 
                   ? 'border-amber-500/30 text-amber-400 hover:bg-amber-500/10' 
+                  : theme === 'light'
+                  ? 'border-slate-300 text-slate-600 hover:bg-slate-100'
                   : 'border-slate-700 text-slate-400 hover:bg-slate-800'
               }`}
             >
@@ -1033,22 +1122,22 @@ function App() {
                     >
                       <div className={`flex-shrink-0 w-6 h-6 sm:w-8 sm:h-8 rounded-full flex items-center justify-center shadow-lg mt-1 sm:mt-0 ${
                         message.role === 'user' 
-                          ? (theme === 'galaxy' ? 'bg-gradient-to-br from-amber-500 to-yellow-600 text-black' : 'bg-gradient-to-br from-indigo-500 to-purple-600 text-white')
-                          : 'bg-slate-700 border border-slate-600'
+                          ? (theme === 'galaxy' ? 'bg-gradient-to-br from-amber-500 to-yellow-600 text-black' : theme === 'flora' ? 'message-bubble-flora-user text-white' : theme === 'light' ? 'bg-gradient-to-br from-indigo-500 to-purple-600 text-white' : 'bg-gradient-to-br from-indigo-500 to-purple-600 text-white')
+                          : (theme === 'light' ? 'bg-white border border-slate-200 shadow' : 'bg-slate-700 border border-slate-600')
                       }`}>
                         {message.role === 'user' ? (
                           <User className={`w-3 h-3 sm:w-4 sm:h-4 ${theme === 'galaxy' ? 'text-black' : 'text-white'}`} />
                         ) : (
-                          <Bot className={`w-3 h-3 sm:w-4 sm:h-4 ${theme === 'galaxy' ? 'text-amber-400' : 'text-indigo-300'}`} />
+                          <Bot className={`w-3 h-3 sm:w-4 sm:h-4 ${theme === 'galaxy' ? 'text-amber-400' : theme === 'light' ? 'text-indigo-400' : 'text-indigo-300'}`} />
                         )}
                       </div>
                       
                       <div className={`p-3 sm:p-4 rounded-2xl shadow-md min-w-0 ${
                         message.role === 'user'
-                          ? (theme === 'galaxy' ? 'bg-gradient-to-br from-amber-500 to-yellow-600 text-black rounded-tr-sm' : 'message-bubble-user text-white rounded-tr-sm')
-                          : 'message-bubble-ai text-slate-200 rounded-tl-sm'
+                          ? (theme === 'galaxy' ? 'bg-gradient-to-br from-amber-500 to-yellow-600 text-black rounded-tr-sm' : theme === 'flora' ? 'message-bubble-flora-user text-white rounded-tr-sm' : 'message-bubble-user text-white rounded-tr-sm')
+                          : (theme === 'light' ? 'message-bubble-light-ai rounded-tl-sm' : 'message-bubble-ai text-slate-200 rounded-tl-sm')
                       }`}>
-                        <div className="text-sm leading-relaxed min-w-0 max-w-full overflow-x-auto break-words prose prose-invert">
+                        <div className={`text-sm leading-relaxed min-w-0 max-w-full overflow-x-auto break-words prose ${theme === 'light' ? 'prose-slate' : 'prose-invert'}`}>
                           <ReactMarkdown
                             remarkPlugins={[remarkGfm]}
                             components={{
@@ -1076,6 +1165,27 @@ function App() {
                             {message.content}
                           </ReactMarkdown>
                         </div>
+                        {message.role === 'user' && (
+                          <div className={`flex items-center gap-1 mt-2 -mb-1 flex-row-reverse`}>
+                            <button
+                              onClick={() => copyResponse(message.content, index)}
+                              className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs transition-all ${
+                                theme === 'galaxy' 
+                                  ? 'text-black/60 hover:text-black hover:bg-black/5' 
+                                  : theme === 'flora'
+                                  ? 'text-white/60 hover:text-white hover:bg-white/10'
+                                  : 'text-white/60 hover:text-white hover:bg-white/10'
+                              }`}
+                              title="Copy query"
+                            >
+                              {copiedMessageId === index ? (
+                                <><Check className="w-3 h-3" /><span>Copied</span></>
+                              ) : (
+                                <><Copy className="w-3 h-3" /><span>Copy</span></>
+                              )}
+                            </button>
+                          </div>
+                        )}
                         {message.role === 'assistant' && message.content && (
                           <div className="flex items-center gap-1 mt-2 -mb-1">
                             <button
@@ -1120,6 +1230,8 @@ function App() {
                       className={`mb-3 flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium shadow-lg border backdrop-blur-md transition-all hover:scale-105 active:scale-95 ${
                         theme === 'galaxy'
                           ? 'bg-black/70 border-amber-500/40 text-amber-300 hover:bg-amber-500/10 hover:border-amber-400/60'
+                          : theme === 'light'
+                          ? 'bg-white/90 border-slate-300 text-slate-600 hover:bg-slate-50 hover:border-slate-400'
                           : 'bg-slate-900/80 border-slate-600/60 text-slate-300 hover:bg-slate-800 hover:border-slate-500'
                       }`}
                     >
@@ -1148,7 +1260,7 @@ function App() {
 
                 <form 
                   onSubmit={handleSubmit}
-                  className="glass-panel w-full p-2 rounded-2xl flex items-center gap-2 shadow-2xl transition-all duration-300"
+                  className={`${theme === 'light' ? 'light-glass' : 'glass-panel'} w-full p-2 rounded-2xl flex items-center gap-2 shadow-2xl transition-all duration-300`}
                 >
                   <textarea
                     value={input}
@@ -1161,16 +1273,18 @@ function App() {
                     }}
                     placeholder={isEngineReady ? "Message Sukhna-AI..." : "Waiting for Sukhna-AI to load..."}
                     disabled={!isEngineReady || isLoading}
-                    className="flex-1 bg-transparent border-0 focus:ring-0 focus:outline-none resize-none p-3 max-h-32 text-sm disabled:opacity-50 text-slate-200 placeholder-slate-500"
+                    className={`flex-1 bg-transparent border-0 focus:ring-0 focus:outline-none resize-none p-3 max-h-32 text-sm disabled:opacity-50 ${theme === 'light' ? 'text-slate-800 placeholder-slate-400' : 'text-slate-200 placeholder-slate-500'}`}
                     rows={1}
                   />
                   <button
                     type="submit"
                     disabled={!input.trim() || !isEngineReady || isLoading}
-                    className={`p-3 disabled:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed rounded-xl flex-shrink-0 flex items-center justify-center btn-creative-hover ${
+                    className={`p-3 disabled:cursor-not-allowed rounded-xl flex-shrink-0 flex items-center justify-center btn-creative-hover ${
                       theme === 'galaxy' 
-                        ? 'bg-gradient-to-r from-amber-500 to-yellow-600 text-black' 
-                        : 'bg-indigo-500 text-white'
+                        ? 'bg-gradient-to-r from-amber-500 to-yellow-600 text-black disabled:bg-slate-700 disabled:text-slate-500' 
+                        : theme === 'light'
+                        ? 'bg-indigo-500 text-white disabled:bg-slate-200 disabled:text-slate-400'
+                        : 'bg-indigo-500 text-white disabled:bg-slate-700 disabled:text-slate-500'
                     }`}
                   >
                     {isLoading ? (
@@ -1181,7 +1295,7 @@ function App() {
                   </button>
                 </form>
                 <div className="text-center mt-2 w-full">
-                  <p className="text-[10px] sm:text-xs text-slate-500">
+                  <p className={`text-[10px] sm:text-xs ${theme === 'light' ? 'text-slate-400' : 'text-slate-500'}`}>
                     Responses are generated locally and may be inaccurate.
                   </p>
                 </div>
@@ -1196,20 +1310,20 @@ function App() {
               className="flex-1 overflow-y-auto pb-10 space-y-8 relative z-10 scrollbar-thin"
             >
               <div className="space-y-2">
-                <h2 className="text-2xl font-bold flex items-center gap-2">
-                  <SettingsIcon className={`w-6 h-6 ${theme === 'galaxy' ? 'text-amber-400' : 'text-indigo-400'}`} />
+                <h2 className={`text-2xl font-bold flex items-center gap-2 ${theme === 'light' ? 'text-slate-800' : ''}`}>
+                  <SettingsIcon className={`w-6 h-6 ${theme === 'galaxy' ? 'text-amber-400' : theme === 'light' ? 'text-indigo-500' : 'text-indigo-400'}`} />
                   Settings
                 </h2>
-                <p className="text-slate-400 text-sm">Manage your AI experience and preferences.</p>
+                <p className={`text-sm ${theme === 'light' ? 'text-slate-500' : 'text-slate-400'}`}>Manage your AI experience and preferences.</p>
               </div>
 
               {/* Appearance Section */}
-              <section className="glass-panel p-6 rounded-2xl space-y-4 border border-white/5">
+              <section className={`${theme === 'light' ? 'light-glass' : 'glass-panel'} p-6 rounded-2xl space-y-4 border ${theme === 'light' ? 'border-slate-200/50' : 'border-white/5'}`}>
                 <div className="flex items-center gap-3">
-                  <div className={`p-2 rounded-lg ${theme === 'galaxy' ? 'bg-amber-500/20 text-amber-400' : 'bg-indigo-500/20 text-indigo-400'}`}>
+                  <div className={`p-2 rounded-lg ${theme === 'galaxy' ? 'bg-amber-500/20 text-amber-400' : theme === 'light' ? 'bg-indigo-500/10 text-indigo-500' : 'bg-indigo-500/20 text-indigo-400'}`}>
                     <Sparkles className="w-5 h-5" />
                   </div>
-                  <h3 className="font-semibold text-lg">Appearance</h3>
+                  <h3 className={`font-semibold text-lg ${theme === 'light' ? 'text-slate-800' : ''}`}>Appearance</h3>
                 </div>
                 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1222,7 +1336,7 @@ function App() {
                     }`}
                   >
                     <div className="flex items-center justify-between w-full">
-                      <span className="font-medium">Deep Space</span>
+                      <span className="font-medium">🌌 Deep Space</span>
                       {theme === 'default' && <Check className="w-4 h-4" />}
                     </div>
                     <span className="text-xs opacity-70">A clean, focused interface with deep blue accents and subtle bubble animations.</span>
@@ -1237,10 +1351,40 @@ function App() {
                     }`}
                   >
                     <div className="flex items-center justify-between w-full">
-                      <span className="font-medium">Galaxy Orbit</span>
+                      <span className="font-medium">🪐 Galaxy Orbit</span>
                       {theme === 'galaxy' && <Check className="w-4 h-4 text-amber-400" />}
                     </div>
                     <span className="text-xs opacity-70">An immersive celestial experience with a rotating solar system and starfield tail.</span>
+                  </button>
+
+                  <button 
+                    onClick={() => setTheme('flora')}
+                    className={`flex flex-col items-start p-4 rounded-xl border transition-all text-left gap-2 ${
+                      theme === 'flora' 
+                        ? 'bg-green-500/10 border-green-500/40 text-green-200 shadow-lg shadow-green-500/10' 
+                        : theme === 'light' ? 'border-slate-200 text-slate-500 hover:bg-slate-50' : 'border-slate-700/50 text-slate-400 hover:bg-slate-800/50'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between w-full">
+                      <span className="font-medium">🌸 Flora & Fauna</span>
+                      {theme === 'flora' && <Check className="w-4 h-4 text-green-400" />}
+                    </div>
+                    <span className="text-xs opacity-70">A lush, nature-inspired theme with a deep forest backdrop and falling cherry blossom petals.</span>
+                  </button>
+
+                  <button 
+                    onClick={() => setTheme('light')}
+                    className={`flex flex-col items-start p-4 rounded-xl border transition-all text-left gap-2 ${
+                      theme === 'light' 
+                        ? 'bg-slate-100 border-slate-300 text-slate-800 shadow-lg shadow-slate-200' 
+                        : 'border-slate-700/50 text-slate-400 hover:bg-slate-800/50'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between w-full">
+                      <span className="font-medium">☀️ Light</span>
+                      {theme === 'light' && <Check className="w-4 h-4 text-indigo-500" />}
+                    </div>
+                    <span className="text-xs opacity-70">A clean, bright interface with soft whites and vibrant indigo accents.</span>
                   </button>
                 </div>
 
@@ -1262,26 +1406,44 @@ function App() {
                     </div>
                   </div>
                 )}
+                {theme === 'flora' && (
+                  <div className="pt-4 border-t border-white/5 mt-4">
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <label className="text-sm font-medium text-slate-200">🌸 Petal Shower</label>
+                        <p className="text-xs text-slate-500">Toggle the falling flower petal animations in the Flora & Fauna theme.</p>
+                      </div>
+                      <button 
+                        onClick={() => setShowPetals(!showPetals)}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${showPetals ? 'bg-green-500' : 'bg-slate-700'}`}
+                      >
+                        <span 
+                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${showPetals ? 'translate-x-6' : 'translate-x-1'}`}
+                        />
+                      </button>
+                    </div>
+                  </div>
+                )}
               </section>
 
               {/* AI Engine Info */}
-              <section className="glass-panel p-6 rounded-2xl space-y-4 border border-white/5">
+              <section className={`${theme === 'light' ? 'light-glass' : 'glass-panel'} p-6 rounded-2xl space-y-4 border ${theme === 'light' ? 'border-slate-200/50' : 'border-white/5'}`}>
                 <div className="flex items-center gap-3">
-                  <div className={`p-2 rounded-lg ${theme === 'galaxy' ? 'bg-amber-500/20 text-amber-400' : 'bg-indigo-500/20 text-indigo-400'}`}>
+                  <div className={`p-2 rounded-lg ${theme === 'galaxy' ? 'bg-amber-500/20 text-amber-400' : theme === 'light' ? 'bg-indigo-500/10 text-indigo-500' : 'bg-indigo-500/20 text-indigo-400'}`}>
                     <Globe className="w-5 h-5" />
                   </div>
-                  <h3 className="font-semibold text-lg">AI Engine</h3>
+                  <h3 className={`font-semibold text-lg ${theme === 'light' ? 'text-slate-800' : ''}`}>AI Engine</h3>
                 </div>
                 
                 <div className="space-y-4">
-                  <div className="flex items-center justify-between py-2 border-b border-white/5">
-                    <span className="text-sm text-slate-300">Active Model</span>
-                    <span className={`text-xs font-mono px-2 py-1 rounded ${theme === 'galaxy' ? 'bg-amber-500/20 text-amber-200' : 'bg-slate-800 text-indigo-300'}`}>
+                  <div className={`flex items-center justify-between py-2 border-b ${theme === 'light' ? 'border-slate-100' : 'border-white/5'}`}>
+                    <span className={`text-sm ${theme === 'light' ? 'text-slate-600' : 'text-slate-300'}`}>Active Model</span>
+                    <span className={`text-xs font-mono px-2 py-1 rounded ${theme === 'galaxy' ? 'bg-amber-500/20 text-amber-200' : theme === 'light' ? 'bg-slate-100 text-indigo-600' : 'bg-slate-800 text-indigo-300'}`}>
                       {SELECTED_MODEL}
                     </span>
                   </div>
-                  <div className="flex items-center justify-between py-2 border-b border-white/5">
-                    <span className="text-sm text-slate-300">Device Status</span>
+                  <div className={`flex items-center justify-between py-2 border-b ${theme === 'light' ? 'border-slate-100' : 'border-white/5'}`}>
+                    <span className={`text-sm ${theme === 'light' ? 'text-slate-600' : 'text-slate-300'}`}>Device Status</span>
                     <div className="flex items-center gap-2">
                       <span className="relative flex h-2 w-2">
                         <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
@@ -1290,26 +1452,26 @@ function App() {
                       <span className="text-xs text-emerald-400">WebGPU Accelerated</span>
                     </div>
                   </div>
-                  <div className="p-3 bg-slate-800/40 rounded-xl text-xs text-slate-400 leading-relaxed">
+                  <div className={`p-3 rounded-xl text-xs leading-relaxed ${theme === 'light' ? 'bg-slate-100 text-slate-500' : 'bg-slate-800/40 text-slate-400'}`}>
                     Sukhna-AI runs locally on your machine using the MLC LLM engine. No data is sent to external servers, ensuring 100% privacy and offline capability.
                   </div>
                 </div>
               </section>
 
               {/* Data Management */}
-              <section className="glass-panel p-6 rounded-2xl space-y-4 border border-white/5">
+              <section className={`${theme === 'light' ? 'light-glass' : 'glass-panel'} p-6 rounded-2xl space-y-4 border ${theme === 'light' ? 'border-slate-200/50' : 'border-white/5'}`}>
                 <div className="flex items-center gap-3">
                   <div className="p-2 rounded-lg bg-red-500/20 text-red-400">
                     <Trash2 className="w-5 h-5" />
                   </div>
-                  <h3 className="font-semibold text-lg">Data Management</h3>
+                  <h3 className={`font-semibold text-lg ${theme === 'light' ? 'text-slate-800' : ''}`}>Data Management</h3>
                 </div>
                 
                 <div className="space-y-4">
-                  <p className="text-sm text-slate-400">Clear your local storage to remove all chats and reset your preferences.</p>
+                  <p className={`text-sm ${theme === 'light' ? 'text-slate-500' : 'text-slate-400'}`}>Clear your local storage to remove all chats and reset your preferences.</p>
                   <button 
                     onClick={() => setIsDeletingAll(true)}
-                    className="px-4 py-2 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 rounded-xl text-sm font-medium transition-all"
+                    className="px-4 py-2 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-500 rounded-xl text-sm font-medium transition-all"
                   >
                     Clear All Chat History
                   </button>
@@ -1317,22 +1479,22 @@ function App() {
               </section>
 
               {/* About Section */}
-              <section className="glass-panel p-6 rounded-2xl space-y-4 border border-white/5">
+              <section className={`${theme === 'light' ? 'light-glass' : 'glass-panel'} p-6 rounded-2xl space-y-4 border ${theme === 'light' ? 'border-slate-200/50' : 'border-white/5'}`}>
                 <div className="flex items-center gap-3">
-                  <div className={`p-2 rounded-lg ${theme === 'galaxy' ? 'bg-amber-500/20 text-amber-400' : 'bg-indigo-500/20 text-indigo-400'}`}>
+                  <div className={`p-2 rounded-lg ${theme === 'galaxy' ? 'bg-amber-500/20 text-amber-400' : theme === 'light' ? 'bg-indigo-500/10 text-indigo-500' : 'bg-indigo-500/20 text-indigo-400'}`}>
                     <Info className="w-5 h-5" />
                   </div>
-                  <h3 className="font-semibold text-lg">About</h3>
+                  <h3 className={`font-semibold text-lg ${theme === 'light' ? 'text-slate-800' : ''}`}>About Sukhna-AI</h3>
                 </div>
                 
-                <div className="space-y-4 text-sm text-slate-300 leading-relaxed">
+                <div className={`space-y-4 text-sm leading-relaxed ${theme === 'light' ? 'text-slate-600' : 'text-slate-300'}`}>
                   <p>
-                    Sukhna-AI is a visionary project created by <strong className={theme === 'galaxy' ? 'text-amber-400' : 'text-indigo-400'}>Lucky Pawar</strong> and <strong className={theme === 'galaxy' ? 'text-amber-400' : 'text-indigo-400'}>Sahil Chadha</strong>.
+                    Sukhna-AI is a visionary project created by <strong className={theme === 'galaxy' ? 'text-amber-400' : theme === 'light' ? 'text-indigo-600' : 'text-indigo-400'}>Lucky Pawar</strong> and <strong className={theme === 'galaxy' ? 'text-amber-400' : theme === 'light' ? 'text-indigo-600' : 'text-indigo-400'}>Sahil Chadha</strong>.
                   </p>
                   <p>
                     This application demonstrates the power of modern web technologies, enabling LLMs to run directly in the browser with high performance and zero latency, while maintaining absolute user privacy.
                   </p>
-                  <div className="pt-2 text-xs text-slate-500 flex items-center justify-between">
+                  <div className={`pt-2 text-xs flex items-center justify-between ${theme === 'light' ? 'text-slate-400' : 'text-slate-500'}`}>
                     <span>Version 1.2.0</span>
                     <span>Built with React & WebGPU</span>
                   </div>
