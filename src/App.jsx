@@ -1,12 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { CreateWebWorkerMLCEngine } from "@mlc-ai/web-llm";
-import { Send, Bot, User, Loader2, Sparkles, AlertCircle, Copy, Check, RefreshCw, ArrowDown, Plus, MessageSquare, PanelLeft, X, Trash2, Settings as SettingsIcon, Globe, Moon, Sun, Info } from 'lucide-react';
+import { Send, Bot, User, Loader2, Sparkles, AlertCircle, Copy, Check, RefreshCw, ArrowDown, Plus, MessageSquare, PanelLeft, X, Trash2, Settings as SettingsIcon, Globe, Moon, Sun, Info, Zap } from 'lucide-react';
 import { motion, AnimatePresence, useScroll, useTransform, useMotionValue, useSpring } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import avatarImg from './assets/sukhna-avatar.png';
+
+// Dynamic engine globals
+let transformersWorker = null;
 
 const SELECTED_MODEL = "Llama-3.2-1B-Instruct-q4f32_1-MLC"; // Small model for better browser performance
 
@@ -85,12 +88,24 @@ const CodeBlockWithCopy = ({ match, className, children, ...props }) => {
   );
 };
 
+const useIsMobile = () => {
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+  return isMobile;
+};
+
 const CursorTail = () => {
+  const isMobile = useIsMobile();
   const canvasRef = useRef(null);
   const pointer = useRef({ x: -100, y: -100 });
   const trail = useRef([]);
 
   useEffect(() => {
+    if (isMobile) return;
     const handleMouseMove = (e) => {
       pointer.current = { x: e.clientX, y: e.clientY };
     };
@@ -145,12 +160,14 @@ const CursorTail = () => {
       window.removeEventListener("resize", resize);
       cancelAnimationFrame(animationFrameId);
     };
-  }, []);
+  }, [isMobile]);
 
+  if (isMobile) return null;
   return <canvas ref={canvasRef} className="fixed inset-0 pointer-events-none z-50 blur-[1px]" />;
 };
 
 function App() {
+  const isMobile = useIsMobile();
   const [chats, setChats] = useState(() => {
     const saved = localStorage.getItem('local-pilot-chats');
     return saved ? JSON.parse(saved) : [];
@@ -163,6 +180,21 @@ function App() {
   const [theme, setTheme] = useState(() => localStorage.getItem('local-pilot-theme') || 'default');
   const [isSidebarOpen, setIsSidebarOpen] = useState(window.innerWidth >= 1024);
   const [activeView, setActiveView] = useState('chat'); // 'chat' or 'settings'
+  const [apiMode, setApiMode] = useState(false);
+  const [apiKey, setApiKey] = useState(() => localStorage.getItem('local-pilot-api-key') || '');
+  const [apiBaseUrl, setApiBaseUrl] = useState(() => localStorage.getItem('local-pilot-api-url') || 'https://openrouter.ai/api/v1');
+  const [apiModel, setApiModel] = useState(() => localStorage.getItem('local-pilot-api-model') || 'mistralai/mistral-7b-instruct:free');
+  const [apiKeyInput, setApiKeyInput] = useState('');
+  const [apiBaseUrlInput, setApiBaseUrlInput] = useState('https://openrouter.ai/api/v1');
+  const [apiModelInput, setApiModelInput] = useState('mistralai/mistral-7b-instruct:free');
+  
+  // Transformers.js state
+  const [isTransformersMode, setIsTransformersMode] = useState(false);
+  const [transformersGenerator, setTransformersGenerator] = useState(null);
+  
+  // Built-in AI state (Chrome Gemini Nano)
+  const [isBuiltInAiMode, setIsBuiltInAiMode] = useState(false);
+  const [builtInAiSession, setBuiltInAiSession] = useState(null);
   const [isDeletingAll, setIsDeletingAll] = useState(false);
   const [showBubbles, setShowBubbles] = useState(() => {
     const saved = localStorage.getItem('local-pilot-bubbles');
@@ -199,6 +231,7 @@ function App() {
   const scrollContainerRef = useRef(null);
   const currentChatIdRef = useRef(currentChatId);
   const generationIdRef = useRef(0);
+  const [showApiOption, setShowApiOption] = useState(false);
   const activeGenerationRef = useRef(Promise.resolve()); // tracks the currently draining stream
 
   const handleStop = () => {
@@ -332,6 +365,60 @@ function App() {
     }
   };
 
+  const saveApiSettings = () => {
+    const key = apiKeyInput.trim();
+    const url = apiBaseUrlInput.trim() || 'https://openrouter.ai/api/v1';
+    const model = apiModelInput.trim() || 'mistralai/mistral-7b-instruct:free';
+    if (!key) return;
+    localStorage.setItem('local-pilot-api-key', key);
+    localStorage.setItem('local-pilot-api-url', url);
+    localStorage.setItem('local-pilot-api-model', model);
+    setApiKey(key);
+    setApiBaseUrl(url);
+    setApiModel(model);
+    setApiMode(true);
+    setIsEngineReady(true);
+  };
+
+  const streamCloudApi = async (msgs, onChunk, genId) => {
+    const res = await fetch(`${apiBaseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+        'HTTP-Referer': window.location.origin,
+        'X-Title': 'Sukhna-AI'
+      },
+      body: JSON.stringify({
+        model: apiModel,
+        messages: msgs,
+        stream: true,
+      })
+    });
+    if (!res.ok) throw new Error(`API error: ${res.status} ${res.statusText}`);
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop(); // keep incomplete line
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed === 'data: [DONE]') continue;
+        if (trimmed.startsWith('data: ')) {
+          try {
+            const json = JSON.parse(trimmed.slice(6));
+            const content = json.choices?.[0]?.delta?.content || '';
+            if (content) onChunk(content, genId);
+          } catch {}
+        }
+      }
+    }
+  };
+
   const handleScroll = () => {
     if (scrollContainerRef.current) {
       const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
@@ -345,17 +432,104 @@ function App() {
   }, [messages.length, loadingProgress]);
 
   useEffect(() => {
+    async function initBuiltInAi() {
+      try {
+        if (window.ai && window.ai.assistant) {
+          const capabilities = await window.ai.assistant.capabilities();
+          if (capabilities.available !== 'no') {
+            const session = await window.ai.assistant.create();
+            setBuiltInAiSession(session);
+            setIsBuiltInAiMode(true);
+            setIsEngineReady(true);
+            setLoadingProgress({ text: 'Using Browser Inbuilt AI!', progress: 100 });
+            return true;
+          }
+        }
+        return false;
+      } catch (e) {
+        console.error("Built-in AI error:", e);
+        return false;
+      }
+    }
+
+    async function initTransformers() {
+      try {
+        setLoadingProgress({ text: 'Starting Universal Engine...', progress: 5 });
+        
+        if (!transformersWorker) {
+          const workerCode = `
+            import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2';
+            env.allowLocalModels = false;
+            env.useBrowserCache = true;
+            
+            let generator;
+            self.onmessage = async (e) => {
+              const { type, data, genId } = e.data;
+              if (type === 'init') {
+                generator = await pipeline('text-generation', 'Xenova/SmolLM-135M-Instruct', {
+                  progress_callback: (p) => self.postMessage({ type: 'progress', data: p })
+                });
+                self.postMessage({ type: 'ready' });
+              } else if (type === 'generate') {
+                await generator(data.prompt, {
+                  max_new_tokens: 512,
+                  temperature: 0.7,
+                  do_sample: true,
+                  callback_function: (beams) => {
+                    const decoded = generator.tokenizer.decode(beams[0].output_token_ids, { skip_special_tokens: true });
+                    self.postMessage({ type: 'chunk', data: decoded, genId });
+                  }
+                });
+                self.postMessage({ type: 'done', genId });
+              }
+            };
+          `;
+          const blob = new Blob([workerCode], { type: 'application/javascript' });
+          transformersWorker = new Worker(URL.createObjectURL(blob), { type: 'module' });
+        }
+
+        transformersWorker.onmessage = (e) => {
+          const { type, data, genId } = e.data;
+          if (type === 'progress' && data.status === 'progress') {
+            setLoadingProgress({
+              text: `Downloading AI: ${Math.round(data.progress)}%`,
+              progress: Math.round(data.progress)
+            });
+          } else if (type === 'ready') {
+            setLoadingProgress({ text: 'AI is ready!', progress: 100 });
+            setIsEngineReady(true);
+            setIsTransformersMode(true);
+          } else if (type === 'chunk') {
+            window._onTransformersChunk?.(data, genId);
+          } else if (type === 'done') {
+            window._onTransformersDone?.(genId);
+          }
+        };
+
+        transformersWorker.postMessage({ type: 'init' });
+      } catch (error) {
+        console.error("Universal Engine Error:", error);
+        setLoadingProgress({
+          text: 'Local AI failed. Trying fallback...',
+          progress: 0,
+          error: true
+        });
+        setShowApiOption(true);
+      }
+    }
+
     async function initEngine() {
       try {
+        // 1. Try WebGPU (MLC-LLM)
+        if (!navigator.gpu) throw new Error("WebGPU Missing");
+
         const initProgressCallback = (initProgress) => {
           setLoadingProgress({
             text: initProgress.text,
             progress: Math.round(initProgress.progress * 100)
           });
-          console.log(initProgress);
         };
 
-        // Use worker for better UI performance
         const worker = new Worker(
           new URL('./worker.js', import.meta.url), 
           { type: 'module' }
@@ -370,26 +544,28 @@ function App() {
         setEngine(newEngine);
         setIsEngineReady(true);
       } catch (error) {
-        console.error("Failed to initialize engine:", error);
-        setLoadingProgress({
-          text: 'Failed to load model. Your browser might not support WebGPU or you might lack sufficient memory.',
-          progress: 0,
-          error: true
-        });
+        console.warn("WebGPU unavailable or failed:", error);
+        
+        // 2. Try Chrome Built-in AI (Gemini Nano)
+        const builtInSuccess = await initBuiltInAi();
+        
+        // 3. Try Transformers.js (Wasm)
+        if (!builtInSuccess) {
+          console.warn("Built-in AI unavailable, falling back to Transformers.js...");
+          initTransformers();
+        }
       }
     }
 
-    // Check for WebGPU support before trying to initialize
-    if (!navigator.gpu) {
-      setLoadingProgress({
-        text: 'WebGPU is not supported in this browser. Please use Chrome/Edge 113+ or Safari 18+.',
-        progress: 0,
-        error: true
-      });
-      return;
+    // Check for existing API key first
+    const savedKey = localStorage.getItem('local-pilot-api-key');
+    if (savedKey) {
+      setApiKey(savedKey);
+      setApiMode(true);
+      setIsEngineReady(true);
+    } else {
+      initEngine();
     }
-
-    initEngine();
   }, []);
 
   const handleSubmit = async (e) => {
@@ -429,17 +605,10 @@ function App() {
 
     const genPromise = (async () => {
     try {
-      const completion = await engine.chat.completions.create({
-        messages: [SYSTEM_PROMPT, ...updatedMessages],
-        stream: true,
-      });
-
       let currentResponse = '';
-      for await (const chunk of completion) {
-        // If generation was cancelled, skip UI updates but let the engine drain
-        if (currentChatIdRef.current !== activeChatId || generationIdRef.current !== genId) continue;
-
-        const content = chunk.choices[0]?.delta?.content || '';
+      
+      const handleChunk = (content) => {
+        if (currentChatIdRef.current !== activeChatId || generationIdRef.current !== genId) return;
         currentResponse += content;
         
         // Update the last message in UI
@@ -458,6 +627,48 @@ function App() {
           }
           return chat;
         }));
+      };
+
+      if (apiMode) {
+        await streamCloudApi([SYSTEM_PROMPT, ...updatedMessages], handleChunk, genId);
+      } else if (isBuiltInAiMode) {
+        const prompt = updatedMessages.map(m => `${m.role}: ${m.content}`).join('\n') + '\nassistant:';
+        const stream = await builtInAiSession.promptStreaming(prompt);
+        for await (const chunk of stream) {
+          if (currentChatIdRef.current !== activeChatId || generationIdRef.current !== genId) break;
+          // builtInAi returns the full text each time
+          handleChunk(chunk.replace(currentResponse, ''));
+        }
+      } else if (isTransformersMode) {
+        const prompt = updatedMessages.map(m => `<|im_start|>${m.role}\n${m.content}<|im_end|>`).join('\n') + '\n<|im_start|>assistant\n';
+        
+        window._onTransformersChunk = (decoded, gId) => {
+          if (genId !== gId) return;
+          const parts = decoded.split('assistant\n');
+          const newText = parts[parts.length - 1] || '';
+          if (newText.length > currentResponse.length) {
+            handleChunk(newText.slice(currentResponse.length));
+          }
+        };
+        
+        transformersWorker.postMessage({ type: 'generate', data: { prompt }, genId });
+        
+        // Wait for completion via a promise if needed, but here we just wait for 'done'
+        await new Promise(resolve => {
+          window._onTransformersDone = (gId) => {
+            if (gId === genId) resolve();
+          };
+        });
+      } else {
+        const completion = await engine.chat.completions.create({
+          messages: [SYSTEM_PROMPT, ...updatedMessages],
+          stream: true,
+        });
+
+        for await (const chunk of completion) {
+          const content = chunk.choices[0]?.delta?.content || '';
+          handleChunk(content);
+        }
       }
     } catch (error) {
       console.error("Chat error:", error);
@@ -524,17 +735,10 @@ function App() {
 
     const genPromise = (async () => {
     try {
-      const completion = await engine.chat.completions.create({
-        messages: [SYSTEM_PROMPT, ...contextMessages],
-        stream: true,
-      });
-
       let currentResponse = '';
-      for await (const chunk of completion) {
-        // If generation was cancelled, skip UI updates but let the engine drain
-        if (currentChatIdRef.current !== activeChatId || generationIdRef.current !== genId) continue;
-
-        const content = chunk.choices[0]?.delta?.content || '';
+      
+      const handleChunk = (content) => {
+        if (currentChatIdRef.current !== activeChatId || generationIdRef.current !== genId) return;
         currentResponse += content;
         
         setMessages(prev => {
@@ -551,6 +755,46 @@ function App() {
           }
           return chat;
         }));
+      };
+
+      if (apiMode) {
+        await streamCloudApi([SYSTEM_PROMPT, ...contextMessages], handleChunk, genId);
+      } else if (isBuiltInAiMode) {
+        const prompt = contextMessages.map(m => `${m.role}: ${m.content}`).join('\n') + '\nassistant:';
+        const stream = await builtInAiSession.promptStreaming(prompt);
+        for await (const chunk of stream) {
+          if (currentChatIdRef.current !== activeChatId || generationIdRef.current !== genId) break;
+          handleChunk(chunk.replace(currentResponse, ''));
+        }
+      } else if (isTransformersMode) {
+        const prompt = contextMessages.map(m => `<|im_start|>${m.role}\n${m.content}<|im_end|>`).join('\n') + '\n<|im_start|>assistant\n';
+        
+        window._onTransformersChunk = (decoded, gId) => {
+          if (genId !== gId) return;
+          const parts = decoded.split('assistant\n');
+          const newText = parts[parts.length - 1] || '';
+          if (newText.length > currentResponse.length) {
+            handleChunk(newText.slice(currentResponse.length));
+          }
+        };
+        
+        transformersWorker.postMessage({ type: 'generate', data: { prompt }, genId });
+        
+        await new Promise(resolve => {
+          window._onTransformersDone = (gId) => {
+            if (gId === genId) resolve();
+          };
+        });
+      } else {
+        const completion = await engine.chat.completions.create({
+          messages: [SYSTEM_PROMPT, ...contextMessages],
+          stream: true,
+        });
+
+        for await (const chunk of completion) {
+          const content = chunk.choices[0]?.delta?.content || '';
+          handleChunk(content);
+        }
       }
     } catch (error) {
       console.error("Regenerate error:", error);
@@ -838,7 +1082,7 @@ function App() {
         {/* Bubble Animation Background */}
         {theme === 'default' && showBubbles && (
           <div className="bubbles-container">
-            {[...Array(8)].map((_, i) => (
+            {[...Array(isMobile ? 4 : 8)].map((_, i) => (
               <div key={i} className="bubble"></div>
             ))}
           </div>
@@ -848,12 +1092,12 @@ function App() {
         {theme === 'flora' && showPetals && (
           <>
             <div className="petals-container">
-              {[...Array(12)].map((_, i) => (
+              {[...Array(isMobile ? 6 : 12)].map((_, i) => (
                 <div key={i} className="petal"></div>
               ))}
             </div>
             <div className="flowers-backdrop">
-              {[...Array(10)].map((_, i) => (
+              {[...Array(isMobile ? 5 : 10)].map((_, i) => (
                 <div key={i} className="flower-unit" style={{ animationDelay: `${i * 0.4}s` }}>
                   <div className="flower-head"></div>
                   <div className="flower-stem"></div>
@@ -873,92 +1117,94 @@ function App() {
           <div className="absolute w-[2px] h-[2px] rounded-full opacity-70" style={{ boxShadow: starsMedium, top: '50%', left: '50%' }} />
         </div>
 
-        {/* Solar System */}
-        <div className="absolute" style={{ width: 0, height: 0, top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}>
+        {/* Solar System - Disabled on mobile for performance */}
+        {!isMobile && (
+          <div className="absolute" style={{ width: 0, height: 0, top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}>
 
-          {/* Sun */}
-          <div className="absolute rounded-full"
-            style={{
-              width: 70, height: 70,
-              background: 'radial-gradient(circle at 35% 35%, #fff7a1, #fde047, #f59e0b, #b45309)',
-              boxShadow: '0 0 40px 20px rgba(253,224,71,0.5), 0 0 80px 40px rgba(245,158,11,0.3), 0 0 120px 60px rgba(180,83,9,0.2)',
-              top: -35, left: -35,
-              animation: 'pulse 4s ease-in-out infinite'
-            }}
-          />
-
-          {/* Mercury */}
-          <div className="absolute rounded-full border border-white/10"
-            style={{ width: 120, height: 120, top: -60, left: -60, animation: 'spin 4s linear infinite' }}>
+            {/* Sun */}
             <div className="absolute rounded-full"
-              style={{ width: 7, height: 7, background: '#a8a8a8', top: -3.5, left: '50%', marginLeft: -3.5,
-                boxShadow: '0 0 4px #a8a8a8' }} />
-          </div>
+              style={{
+                width: 70, height: 70,
+                background: 'radial-gradient(circle at 35% 35%, #fff7a1, #fde047, #f59e0b, #b45309)',
+                boxShadow: '0 0 40px 20px rgba(253,224,71,0.5), 0 0 80px 40px rgba(245,158,11,0.3), 0 0 120px 60px rgba(180,83,9,0.2)',
+                top: -35, left: -35,
+                animation: 'pulse 4s ease-in-out infinite'
+              }}
+            />
 
-          {/* Venus */}
-          <div className="absolute rounded-full border border-white/10"
-            style={{ width: 180, height: 180, top: -90, left: -90, animation: 'spin 10s linear infinite' }}>
-            <div className="absolute rounded-full"
-              style={{ width: 12, height: 12, background: 'radial-gradient(#f5c842, #d97706)', top: -6, left: '50%', marginLeft: -6,
-                boxShadow: '0 0 8px #f5c842' }} />
-          </div>
-
-          {/* Earth */}
-          <div className="absolute rounded-full border border-white/10"
-            style={{ width: 260, height: 260, top: -130, left: -130, animation: 'spin 16s linear infinite' }}>
-            <div className="absolute rounded-full"
-              style={{ width: 14, height: 14, background: 'radial-gradient(#4ade80, #2563eb)', top: -7, left: '50%', marginLeft: -7,
-                boxShadow: '0 0 8px #2563eb' }} />
-          </div>
-
-          {/* Mars */}
-          <div className="absolute rounded-full border border-white/10"
-            style={{ width: 350, height: 350, top: -175, left: -175, animation: 'spin 25s linear infinite' }}>
-            <div className="absolute rounded-full"
-              style={{ width: 10, height: 10, background: 'radial-gradient(#f87171, #b91c1c)', top: -5, left: '50%', marginLeft: -5,
-                boxShadow: '0 0 6px #ef4444' }} />
-          </div>
-
-          {/* Jupiter */}
-          <div className="absolute rounded-full border border-white/10"
-            style={{ width: 480, height: 480, top: -240, left: -240, animation: 'spin 40s linear infinite' }}>
-            <div className="absolute rounded-full"
-              style={{ width: 28, height: 28, background: 'radial-gradient(#fde68a, #d97706, #92400e)', top: -14, left: '50%', marginLeft: -14,
-                boxShadow: '0 0 12px #d97706' }} />
-          </div>
-
-          {/* Saturn */}
-          <div className="absolute rounded-full border border-white/10"
-            style={{ width: 620, height: 620, top: -310, left: -310, animation: 'spin 65s linear infinite' }}>
-            <div className="absolute" style={{ top: -18, left: '50%', marginLeft: -18 }}>
-              {/* Saturn planet */}
+            {/* Mercury */}
+            <div className="absolute rounded-full border border-white/10"
+              style={{ width: 120, height: 120, top: -60, left: -60, animation: 'spin 4s linear infinite' }}>
               <div className="absolute rounded-full"
-                style={{ width: 22, height: 22, background: 'radial-gradient(#fef3c7, #d97706, #92400e)', top: 0, left: 0,
-                  boxShadow: '0 0 10px #d97706' }} />
-              {/* Saturn ring */}
-              <div className="absolute rounded-full border-2 border-amber-400/60"
-                style={{ width: 46, height: 14, top: 4, left: -12, borderRadius: '50%', transform: 'rotateX(70deg)',
-                  boxShadow: '0 0 6px rgba(251,191,36,0.4)' }} />
+                style={{ width: 7, height: 7, background: '#a8a8a8', top: -3.5, left: '50%', marginLeft: -3.5,
+                  boxShadow: '0 0 4px #a8a8a8' }} />
             </div>
-          </div>
 
-          {/* Uranus */}
-          <div className="absolute rounded-full border border-white/10"
-            style={{ width: 760, height: 760, top: -380, left: -380, animation: 'spin 95s linear infinite' }}>
-            <div className="absolute rounded-full"
-              style={{ width: 18, height: 18, background: 'radial-gradient(#a5f3fc, #0284c7)', top: -9, left: '50%', marginLeft: -9,
-                boxShadow: '0 0 8px #0ea5e9' }} />
-          </div>
+            {/* Venus */}
+            <div className="absolute rounded-full border border-white/10"
+              style={{ width: 180, height: 180, top: -90, left: -90, animation: 'spin 10s linear infinite' }}>
+              <div className="absolute rounded-full"
+                style={{ width: 12, height: 12, background: 'radial-gradient(#f5c842, #d97706)', top: -6, left: '50%', marginLeft: -6,
+                  boxShadow: '0 0 8px #f5c842' }} />
+            </div>
 
-          {/* Neptune */}
-          <div className="absolute rounded-full border border-white/10"
-            style={{ width: 900, height: 900, top: -450, left: -450, animation: 'spin 130s linear infinite' }}>
-            <div className="absolute rounded-full"
-              style={{ width: 16, height: 16, background: 'radial-gradient(#93c5fd, #1d4ed8)', top: -8, left: '50%', marginLeft: -8,
-                boxShadow: '0 0 8px #3b82f6' }} />
-          </div>
+            {/* Earth */}
+            <div className="absolute rounded-full border border-white/10"
+              style={{ width: 260, height: 260, top: -130, left: -130, animation: 'spin 16s linear infinite' }}>
+              <div className="absolute rounded-full"
+                style={{ width: 14, height: 14, background: 'radial-gradient(#4ade80, #2563eb)', top: -7, left: '50%', marginLeft: -7,
+                  boxShadow: '0 0 8px #2563eb' }} />
+            </div>
 
-        </div>
+            {/* Mars */}
+            <div className="absolute rounded-full border border-white/10"
+              style={{ width: 350, height: 350, top: -175, left: -175, animation: 'spin 25s linear infinite' }}>
+              <div className="absolute rounded-full"
+                style={{ width: 10, height: 10, background: 'radial-gradient(#f87171, #b91c1c)', top: -5, left: '50%', marginLeft: -5,
+                  boxShadow: '0 0 6px #ef4444' }} />
+            </div>
+
+            {/* Jupiter */}
+            <div className="absolute rounded-full border border-white/10"
+              style={{ width: 480, height: 480, top: -240, left: -240, animation: 'spin 40s linear infinite' }}>
+              <div className="absolute rounded-full"
+                style={{ width: 28, height: 28, background: 'radial-gradient(#fde68a, #d97706, #92400e)', top: -14, left: '50%', marginLeft: -14,
+                  boxShadow: '0 0 12px #d97706' }} />
+            </div>
+
+            {/* Saturn */}
+            <div className="absolute rounded-full border border-white/10"
+              style={{ width: 620, height: 620, top: -310, left: -310, animation: 'spin 65s linear infinite' }}>
+              <div className="absolute" style={{ top: -18, left: '50%', marginLeft: -18 }}>
+                {/* Saturn planet */}
+                <div className="absolute rounded-full"
+                  style={{ width: 22, height: 22, background: 'radial-gradient(#fef3c7, #d97706, #92400e)', top: 0, left: 0,
+                    boxShadow: '0 0 10px #d97706' }} />
+                {/* Saturn ring */}
+                <div className="absolute rounded-full border-2 border-amber-400/60"
+                  style={{ width: 46, height: 14, top: 4, left: -12, borderRadius: '50%', transform: 'rotateX(70deg)',
+                    boxShadow: '0 0 6px rgba(251,191,36,0.4)' }} />
+              </div>
+            </div>
+
+            {/* Uranus */}
+            <div className="absolute rounded-full border border-white/10"
+              style={{ width: 760, height: 760, top: -380, left: -380, animation: 'spin 95s linear infinite' }}>
+              <div className="absolute rounded-full"
+                style={{ width: 18, height: 18, background: 'radial-gradient(#a5f3fc, #0284c7)', top: -9, left: '50%', marginLeft: -9,
+                  boxShadow: '0 0 8px #0ea5e9' }} />
+            </div>
+
+            {/* Neptune */}
+            <div className="absolute rounded-full border border-white/10"
+              style={{ width: 900, height: 900, top: -450, left: -450, animation: 'spin 130s linear infinite' }}>
+              <div className="absolute rounded-full"
+                style={{ width: 16, height: 16, background: 'radial-gradient(#93c5fd, #1d4ed8)', top: -8, left: '50%', marginLeft: -8,
+                  boxShadow: '0 0 8px #3b82f6' }} />
+            </div>
+
+          </div>
+        )}
 
         {/* Vignette overlay */}
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_30%,black_100%)]" />
@@ -1023,9 +1269,26 @@ function App() {
               <img src={avatarImg} alt="Sukhna-AI" className="w-6 h-6 sm:w-8 sm:h-8 object-cover" />
             </div>
           <div>
-            <h1 className={`text-lg sm:text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r ${theme === 'galaxy' ? 'from-amber-400 to-yellow-200' : theme === 'flora' ? 'from-blue-600 to-blue-400' : theme === 'light' ? 'from-indigo-600 to-purple-500' : 'from-indigo-400 to-purple-400'}`}>
-              Sukhna-AI
-            </h1>
+            <div className="flex items-center gap-2">
+              <h1 className={`text-lg sm:text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r ${theme === 'galaxy' ? 'from-amber-400 to-yellow-200' : theme === 'flora' ? 'from-blue-600 to-blue-400' : theme === 'light' ? 'from-indigo-600 to-purple-500' : 'from-indigo-400 to-purple-400'}`}>
+                Sukhna-AI
+              </h1>
+              {isBuiltInAiMode && (
+                <span className="px-1.5 py-0.5 rounded-md text-[9px] font-bold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 uppercase tracking-tight shadow-sm">
+                  Inbuilt AI
+                </span>
+              )}
+              {isTransformersMode && !isBuiltInAiMode && (
+                <span className="px-1.5 py-0.5 rounded-md text-[9px] font-bold bg-amber-500/10 text-amber-500 border border-amber-500/20 uppercase tracking-tight shadow-sm">
+                  CPU Engine
+                </span>
+              )}
+              {apiMode && (
+                <span className="px-1.5 py-0.5 rounded-md text-[9px] font-bold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 uppercase tracking-tight shadow-sm">
+                  Cloud API
+                </span>
+              )}
+            </div>
             <p className={`text-[10px] sm:text-xs flex items-center gap-1.5 ${theme === 'light' ? 'text-slate-500' : 'text-slate-400'}`}>
               <span className="relative flex h-2 w-2">
                 {isEngineReady ? (
@@ -1063,7 +1326,7 @@ function App() {
       </header>
 
       {/* Main Content Area */}
-      <main className="flex-1 overflow-hidden flex flex-col relative max-w-4xl w-full mx-auto p-2 sm:p-6">
+      <main className={`flex-1 overflow-hidden flex flex-col relative ${isMobile ? 'w-full px-2 py-3' : 'max-w-4xl w-full mx-auto p-6'}`}>
         
         <AnimatePresence mode="wait">
           {activeView === 'chat' ? (
@@ -1080,112 +1343,193 @@ function App() {
                     <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/10 to-purple-500/10 z-0"></div>
                     
                     <div className="relative z-10">
-                      {loadingProgress.error ? (
-                        <div className="relative w-24 h-24 mx-auto mb-6">
-                          <img src={avatarImg} alt="Error" className="w-full h-full object-cover rounded-2xl grayscale opacity-50" />
-                          <div className="absolute inset-0 flex items-center justify-center">
-                            <AlertCircle className="w-12 h-12 text-red-400" />
+                      {apiMode ? (
+                        /* === API MODE SETUP FORM === */
+                        <div className="space-y-4">
+                          <div className="relative w-20 h-20 mx-auto mb-2">
+                            <div className="absolute inset-0 bg-indigo-400/20 rounded-full blur-xl animate-pulse" />
+                            <img src={avatarImg} alt="Sukhna-AI" className="relative w-full h-full object-cover rounded-2xl border border-indigo-500/30 shadow-lg" />
                           </div>
+                          <h2 className="text-xl font-bold">Connect to Cloud AI</h2>
+                          <p className="text-xs text-slate-400">
+                            Enter your API key to use Sukhna-AI via the cloud. 
+                            <br />Recommended: <a href="https://openrouter.ai" target="_blank" rel="noopener noreferrer" className="text-indigo-400 underline">openrouter.ai</a> (Free models available).
+                          </p>
+
+                          <div className="space-y-3 text-left">
+                            <input
+                              type="password"
+                              value={apiKeyInput}
+                              onChange={e => setApiKeyInput(e.target.value)}
+                              placeholder="API Key (e.g. sk-or-...)"
+                              className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-all"
+                            />
+                            <input
+                              type="text"
+                              value={apiModelInput}
+                              onChange={e => setApiModelInput(e.target.value)}
+                              placeholder="Model (e.g. mistralai/mistral-7b-instruct:free)"
+                              className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-all"
+                            />
+                            <input
+                              type="text"
+                              value={apiBaseUrlInput}
+                              onChange={e => setApiBaseUrlInput(e.target.value)}
+                              placeholder="API Base URL"
+                              className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-all"
+                            />
+                          </div>
+
+                          <button
+                            onClick={saveApiSettings}
+                            disabled={!apiKeyInput.trim()}
+                            className="w-full py-3 rounded-xl bg-indigo-600 text-white font-bold hover:bg-indigo-500 active:scale-[0.98] transition-all disabled:opacity-40"
+                          >
+                            Start Chatting
+                          </button>
+                          
+                          <button 
+                            onClick={() => { setApiMode(false); setShowApiOption(true); }}
+                            className="text-xs text-slate-500 hover:text-slate-300 transition-colors"
+                          >
+                            Back to local mode
+                          </button>
                         </div>
                       ) : (
-                        <div className="relative w-36 h-36 mx-auto mb-6">
-                          {/* Ambient glow that grows with progress */}
-                          <div 
-                            className="absolute inset-0 rounded-full blur-2xl transition-all duration-500"
-                            style={{ 
-                              background: `radial-gradient(circle, rgba(99,102,241,${loadingProgress.progress / 200}) 0%, transparent 70%)`,
-                              transform: `scale(${1 + loadingProgress.progress / 200})`
-                            }} 
-                          />
-
-                          {/* The image container with border */}
-                          <div className="relative w-full h-full rounded-3xl overflow-hidden border border-indigo-500/20 shadow-2xl shadow-indigo-500/10 bg-slate-900">
-                            
-                            {/* Greyscale / dimmed base layer (always visible) */}
-                            <img 
-                              src={avatarImg} 
-                              alt="Sukhna-AI base" 
-                              className="absolute inset-0 w-full h-full object-cover grayscale opacity-20" 
-                            />
-                            
-                            {/* Revealed full-colour layer, clips from bottom up with progress */}
-                            <div
-                              className="absolute inset-0 overflow-hidden transition-all duration-700 ease-out"
-                              style={{ 
-                                clipPath: `inset(${100 - loadingProgress.progress}% 0 0 0)`,
-                              }}
-                            >
-                              <img 
-                                src={avatarImg} 
-                                alt="Sukhna-AI" 
-                                className="w-full h-full object-cover" 
-                              />
+                        /* === NORMAL / ERROR LOADING SCREEN === */
+                        <>
+                          {loadingProgress.error ? (
+                            <div className="relative w-24 h-24 mx-auto mb-6">
+                              <img src={avatarImg} alt="Error" className="w-full h-full object-cover rounded-2xl grayscale opacity-50" />
+                              <div className="absolute inset-0 flex items-center justify-center">
+                                <AlertCircle className="w-12 h-12 text-red-400" />
+                              </div>
                             </div>
-
-                            {/* Animated scan-line at the reveal boundary */}
-                            {loadingProgress.progress < 100 && loadingProgress.progress > 0 && (
-                              <motion.div
-                                className="absolute left-0 right-0 h-[3px] pointer-events-none"
-                                style={{ top: `${100 - loadingProgress.progress}%` }}
-                                animate={{ opacity: [0.6, 1, 0.6] }}
-                                transition={{ duration: 0.8, repeat: Infinity }}
-                              >
-                                <div className="w-full h-full bg-gradient-to-r from-transparent via-indigo-400 to-transparent" />
-                                <div className="absolute inset-x-0 -top-2 h-4 bg-indigo-500/15 blur-sm" />
-                              </motion.div>
-                            )}
-
-                            {/* Completion flash */}
-                            {loadingProgress.progress >= 100 && (
-                              <motion.div
-                                className="absolute inset-0 bg-indigo-400/30 rounded-3xl"
-                                initial={{ opacity: 1 }}
-                                animate={{ opacity: 0 }}
-                                transition={{ duration: 1, ease: "easeOut" }}
+                          ) : (
+                            <div className="relative w-36 h-36 mx-auto mb-6">
+                              {/* Ambient glow that grows with progress */}
+                              <div 
+                                className="absolute inset-0 rounded-full blur-2xl transition-all duration-500"
+                                style={{ 
+                                  background: `radial-gradient(circle, rgba(99,102,241,${loadingProgress.progress / 200}) 0%, transparent 70%)`,
+                                  transform: `scale(${1 + loadingProgress.progress / 200})`
+                                }} 
                               />
-                            )}
-                          </div>
 
-                          {/* Progress percentage badge */}
-                          <motion.div 
-                            className="absolute -bottom-3 left-1/2 -translate-x-1/2 bg-indigo-600 text-white text-[10px] font-bold px-2.5 py-0.5 rounded-full shadow-lg shadow-indigo-500/30 tabular-nums"
-                            initial={{ opacity: 0, y: 4 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: 0.5 }}
-                          >
-                            {loadingProgress.progress}%
-                          </motion.div>
-                        </div>
-                      )}
-                      
-                      <h2 className="text-xl sm:text-2xl font-bold mb-2">
-                        {loadingProgress.error ? 'Initialization Failed' : 'Loading AI Model'}
-                      </h2>
-                      
-                      <p className={`text-sm ${loadingProgress.error ? 'text-red-300' : 'text-slate-300'} mb-6`}>
-                        {loadingProgress.text}
-                      </p>
+                              {/* The image container with border */}
+                              <div className="relative w-full h-full rounded-3xl overflow-hidden border border-indigo-500/20 shadow-2xl shadow-indigo-500/10 bg-slate-900">
+                                
+                                {/* Greyscale / dimmed base layer (always visible) */}
+                                <img 
+                                  src={avatarImg} 
+                                  alt="Sukhna-AI base" 
+                                  className="absolute inset-0 w-full h-full object-cover grayscale opacity-20" 
+                                />
+                                
+                                {/* Revealed full-colour layer, clips from bottom up with progress */}
+                                <div
+                                  className="absolute inset-0 overflow-hidden transition-all duration-700 ease-out"
+                                  style={{ 
+                                    clipPath: `inset(${100 - loadingProgress.progress}% 0 0 0)`,
+                                  }}
+                                >
+                                  <img 
+                                    src={avatarImg} 
+                                    alt="Sukhna-AI" 
+                                    className="w-full h-full object-cover" 
+                                  />
+                                </div>
 
-                      {!loadingProgress.error && (
-                        <div className="w-full bg-slate-800 rounded-full h-2.5 overflow-hidden">
-                          <div 
-                            className="bg-gradient-to-r from-indigo-500 to-purple-500 h-2.5 rounded-full transition-all duration-300 ease-out" 
-                            style={{ width: `${loadingProgress.progress}%` }}
-                          ></div>
-                        </div>
-                      )}
-                      
-                      {!loadingProgress.error && (
-                        <p className="text-xs text-slate-500 mt-4">
-                          This model runs entirely in your browser. The first load downloads the model files (~1GB) which will be cached for future visits.
-                        </p>
+                                {/* Animated scan-line at the reveal boundary */}
+                                {loadingProgress.progress < 100 && loadingProgress.progress > 0 && (
+                                  <motion.div
+                                    className="absolute left-0 right-0 h-[3px] pointer-events-none"
+                                    style={{ top: `${100 - loadingProgress.progress}%` }}
+                                    animate={{ opacity: [0.6, 1, 0.6] }}
+                                    transition={{ duration: 0.8, repeat: Infinity }}
+                                  >
+                                    <div className="w-full h-full bg-gradient-to-r from-transparent via-indigo-400 to-transparent" />
+                                    <div className="absolute inset-x-0 -top-2 h-4 bg-indigo-500/15 blur-sm" />
+                                  </motion.div>
+                                )}
+
+                                {/* Completion flash */}
+                                {loadingProgress.progress >= 100 && (
+                                  <motion.div
+                                    className="absolute inset-0 bg-indigo-400/30 rounded-3xl"
+                                    initial={{ opacity: 1 }}
+                                    animate={{ opacity: 0 }}
+                                    transition={{ duration: 1, ease: "easeOut" }}
+                                  />
+                                )}
+                              </div>
+
+                              {/* Progress percentage badge */}
+                              <motion.div 
+                                className="absolute -bottom-3 left-1/2 -translate-x-1/2 bg-indigo-600 text-white text-[10px] font-bold px-2.5 py-0.5 rounded-full shadow-lg shadow-indigo-500/30 tabular-nums"
+                                initial={{ opacity: 0, y: 4 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: 0.5 }}
+                              >
+                                {loadingProgress.progress}%
+                              </motion.div>
+                            </div>
+                          )}
+                          
+                          <h2 className="text-xl sm:text-2xl font-bold mb-2">
+                            {loadingProgress.error ? 'Initialization Failed' : 'Loading AI Model'}
+                          </h2>
+                          
+                          <p className={`text-sm ${loadingProgress.error ? 'text-red-300' : 'text-slate-300'} mb-6`}>
+                            {loadingProgress.text}
+                          </p>
+
+                          {loadingProgress.error && showApiOption && (
+                            <div className="space-y-3 w-full">
+                              <button
+                                onClick={() => setApiMode(true)}
+                                className="w-full py-3 px-4 rounded-xl bg-indigo-600 text-white text-sm font-bold hover:bg-indigo-500 transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20"
+                              >
+                                <Globe className="w-4 h-4" />
+                                Try Cloud AI Fallback (Mobile)
+                              </button>
+                              
+                              <button
+                                onClick={() => {
+                                  setApiKeyInput('');
+                                  setApiModelInput('mistralai/mistral-7b-instruct:free');
+                                  setApiMode(true);
+                                }}
+                                className="w-full py-2 px-4 rounded-xl bg-slate-800 text-slate-300 text-xs font-semibold hover:bg-slate-700 transition-all flex items-center justify-center gap-2"
+                              >
+                                <Zap className="w-3.5 h-3.5 text-amber-400" />
+                                Use Pre-configured Free API
+                              </button>
+                            </div>
+                          )}
+
+                          {!loadingProgress.error && (
+                            <div className="w-full bg-slate-800 rounded-full h-2.5 overflow-hidden">
+                              <div 
+                                className="bg-gradient-to-r from-indigo-500 to-purple-500 h-2.5 rounded-full transition-all duration-300 ease-out" 
+                                style={{ width: `${loadingProgress.progress}%` }}
+                              ></div>
+                            </div>
+                          )}
+                          
+                          {!loadingProgress.error && (
+                            <p className="text-xs text-slate-500 mt-4">
+                              This model runs entirely in your browser. The first load downloads the model files (~1GB) which will be cached for future visits.
+                            </p>
+                          )}
+                        </>
                       )}
                     </div>
                   </div>
                 </div>
               )}
 
-              <div ref={scrollContainerRef} onScroll={handleScroll} className="flex-1 overflow-y-auto space-y-4 sm:space-y-6 pb-36 sm:pb-32 pr-1 sm:pr-2 scrollbar-thin relative z-10">
+              <div ref={scrollContainerRef} onScroll={handleScroll} className={`flex-1 overflow-y-auto space-y-4 sm:space-y-6 ${isMobile ? 'pb-24 pt-2' : 'pb-36 pr-2'} scrollbar-thin relative z-10`}>
                 <AnimatePresence>
                   {messages.map((message, index) => (
                     <motion.div
@@ -1295,7 +1639,7 @@ function App() {
               </div>
 
               {/* Input Area */}
-              <div className="absolute bottom-2 sm:bottom-6 left-2 sm:left-6 right-2 sm:right-6 lg:left-0 lg:right-0 z-20 flex flex-col items-center">
+              <div className={`absolute bottom-0 left-0 right-0 z-20 flex flex-col items-center ${isMobile ? 'px-2 pb-2' : 'px-6 pb-6'}`}>
                 <AnimatePresence>
                   {isLoading && (
                     <motion.button
@@ -1323,7 +1667,7 @@ function App() {
                       animate={{ opacity: 1, y: 0, scale: 1 }}
                       exit={{ opacity: 0, y: 10, scale: 0.9 }}
                       onClick={scrollToBottom}
-                      className={`mb-3 sm:mb-4 w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center rounded-full shadow-lg border btn-creative-hover ${
+                      className={`mb-3 w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center rounded-full shadow-lg border btn-creative-hover ${
                         theme === 'galaxy' 
                           ? 'bg-black/60 border-amber-500/30 text-amber-400' 
                           : 'bg-slate-800 border-indigo-500/30 text-indigo-400'
@@ -1337,7 +1681,7 @@ function App() {
 
                 <form 
                   onSubmit={handleSubmit}
-                  className={`${theme === 'light' ? 'light-glass' : 'glass-panel'} w-full p-2 rounded-2xl flex items-center gap-2 shadow-2xl transition-all duration-300`}
+                  className={`${theme === 'light' ? 'light-glass border-slate-300' : 'glass-panel border-white/10'} w-full p-1.5 sm:p-2 rounded-2xl flex items-center gap-2 shadow-2xl transition-all duration-300`}
                 >
                   <textarea
                     value={input}
@@ -1348,15 +1692,15 @@ function App() {
                         handleSubmit(e);
                       }
                     }}
-                    placeholder={isEngineReady ? "Message Sukhna-AI..." : "Waiting for Sukhna-AI to load..."}
+                    placeholder={isEngineReady ? "Message Sukhna-AI..." : "Loading AI..."}
                     disabled={!isEngineReady || isLoading}
-                    className={`flex-1 bg-transparent border-0 focus:ring-0 focus:outline-none resize-none p-3 max-h-32 text-sm disabled:opacity-50 ${theme === 'light' ? 'text-slate-800 placeholder-slate-400' : 'text-slate-200 placeholder-slate-500'}`}
+                    className={`flex-1 bg-transparent border-0 focus:ring-0 focus:outline-none resize-none p-2 sm:p-3 max-h-32 text-sm disabled:opacity-50 ${theme === 'light' ? 'text-slate-800 placeholder-slate-400' : 'text-slate-200 placeholder-slate-500'}`}
                     rows={1}
                   />
                   <button
                     type="submit"
                     disabled={!input.trim() || !isEngineReady || isLoading}
-                    className={`p-3 disabled:cursor-not-allowed rounded-xl flex-shrink-0 flex items-center justify-center btn-creative-hover ${
+                    className={`p-2.5 sm:p-3 disabled:cursor-not-allowed rounded-xl flex-shrink-0 flex items-center justify-center btn-creative-hover transition-all active:scale-90 ${
                       theme === 'galaxy' 
                         ? 'bg-gradient-to-r from-amber-500 to-yellow-600 text-black disabled:bg-slate-700 disabled:text-slate-500' 
                         : theme === 'light'
@@ -1367,13 +1711,13 @@ function App() {
                     {isLoading ? (
                       <Loader2 className="w-5 h-5 animate-spin" />
                     ) : (
-                      <Send className="w-5 h-5 group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
+                      <Send className="w-5 h-5 transition-transform" />
                     )}
                   </button>
                 </form>
-                <div className="text-center mt-2 w-full">
-                  <p className={`text-[10px] sm:text-xs ${theme === 'light' ? 'text-slate-400' : 'text-slate-500'}`}>
-                    Responses are generated locally and may be inaccurate.
+                <div className="text-center mt-1 w-full">
+                  <p className={`text-[9px] sm:text-[10px] ${theme === 'light' ? 'text-slate-400' : 'text-slate-500'}`}>
+                    Local AI. Your data stays private.
                   </p>
                 </div>
               </div>
