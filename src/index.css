@@ -371,3 +371,27 @@ body {
   border: 1px solid rgba(226, 232, 240, 0.8);
   color: #1e293b;
 }
+
+/* ========================
+   Sukhna Theme Styles
+   ======================== */
+.sukhna-cursor, .sukhna-cursor * {
+  cursor: none !important;
+}
+
+.sukhna-glass {
+  background: rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(99, 102, 241, 0.2);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.8);
+}
+
+@keyframes pulse-sukhna {
+  0%, 100% { filter: drop-shadow(0 0 20px rgba(99, 102, 241, 0.4)); }
+  50% { filter: drop-shadow(0 0 40px rgba(99, 102, 241, 0.8)); }
+}
+
+.sukhna-3d-logo {
+  animation: pulse-sukhna 4s ease-in-out infinite;
+}
