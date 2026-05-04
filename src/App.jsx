@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { CreateWebWorkerMLCEngine } from "@mlc-ai/web-llm";
-import { Send, Bot, User, Loader2, Sparkles, AlertCircle, Copy, Check, RefreshCw, ArrowDown, Plus, MessageSquare, PanelLeft, X, Trash2, Settings as SettingsIcon, Globe, Moon, Sun, Info, Zap, Image as ImageIcon, Download } from 'lucide-react';
+import { Send, Bot, User, Loader2, Sparkles, AlertCircle, Copy, Check, RefreshCw, ArrowDown, Plus, MessageSquare, PanelLeft, X, Trash2, Settings as SettingsIcon, Globe, Moon, Sun, Info, Zap, Image as ImageIcon, Download, Volume2 } from 'lucide-react';
 import { motion, AnimatePresence, useScroll, useTransform, useMotionValue, useSpring } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -280,6 +280,43 @@ function App() {
   const [apiTestStatus, setApiTestStatus] = useState(null); // 'testing', 'success', { error: '...' }
   const [showApiConfig, setShowApiConfig] = useState(false);
   const [isImageMode, setIsImageMode] = useState(false);
+  const [isGalleryOpen, setIsGalleryOpen] = useState(false);
+  const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
+
+  useEffect(() => {
+    const handleMouseMove = (e) => {
+      setMousePosition({
+        x: (e.clientX / window.innerWidth - 0.5) * 20,
+        y: (e.clientY / window.innerHeight - 0.5) * 20
+      });
+    };
+    window.addEventListener('mousemove', handleMouseMove);
+    return () => window.removeEventListener('mousemove', handleMouseMove);
+  }, []);
+
+  const speakResponse = (text) => {
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    
+    // Find a warm female voice from available system voices
+    const voices = window.speechSynthesis.getVoices();
+    const femaleVoice = voices.find(v => 
+      v.name.toLowerCase().includes('female') || 
+      v.name.toLowerCase().includes('samantha') || 
+      v.name.toLowerCase().includes('google uk english female') ||
+      v.name.toLowerCase().includes('victoria') ||
+      v.name.toLowerCase().includes('moira')
+    );
+    
+    if (femaleVoice) utterance.voice = femaleVoice;
+    
+    // Soft, intelligent tone tuning
+    utterance.rate = 0.92; // Slightly slower for a more thoughtful, soft feel
+    utterance.pitch = 1.05; // Gentle feminine pitch
+    utterance.volume = 1.0;
+    
+    window.speechSynthesis.speak(utterance);
+  };
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
 
   // Transformers.js state
@@ -1362,6 +1399,24 @@ function App() {
           }`}>
           <button
             onClick={() => {
+              setIsGalleryOpen(true);
+              if (window.innerWidth < 1024) setIsSidebarOpen(false);
+            }}
+            className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all border mb-2 ${theme === 'galaxy'
+              ? 'hover:bg-amber-500/5 text-amber-500/50 border-transparent hover:text-amber-300/70'
+              : theme === 'flora'
+                ? 'hover:bg-blue-500/10 text-blue-600 border-transparent hover:text-blue-800'
+                : theme === 'light'
+                  ? 'hover:bg-slate-100 text-slate-500 border-transparent hover:text-slate-700'
+                  : 'hover:bg-slate-800/50 text-slate-400 border-transparent'
+            }`}
+          >
+            <ImageIcon className={`w-5 h-5 ${theme === 'galaxy' ? 'text-amber-500/70' : 'text-slate-500'}`} />
+            <span className="text-sm font-medium">Vision Gallery</span>
+          </button>
+
+          <button
+            onClick={() => {
               setActiveView('settings');
               if (window.innerWidth < 1024) setIsSidebarOpen(false);
             }}
@@ -1622,7 +1677,10 @@ function App() {
 
         <motion.div
           className="absolute inset-0 z-0 bg-gradient-to-br from-indigo-900/40 via-purple-900/30 to-slate-900 pointer-events-none"
-          style={{ opacity: gradientOpacity }}
+          style={{ 
+            opacity: gradientOpacity,
+            transform: `translate(${mousePosition.x * 0.5}px, ${mousePosition.y * 0.5}px)`
+          }}
         />
 
         {/* Bubble Animation Background */}
@@ -2089,6 +2147,17 @@ function App() {
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
+                                  speakResponse(message.content);
+                                }}
+                                className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium bg-slate-800/40 text-slate-400 hover:text-white hover:bg-slate-700/60 transition-all border border-white/5 active:scale-95 touch-manipulation"
+                                title="Read aloud"
+                              >
+                                <Volume2 className="w-3.5 h-3.5" />
+                                <span>Read</span>
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
                                   handleRegenerate(index);
                                 }}
                                 disabled={isLoading}
@@ -2167,25 +2236,51 @@ function App() {
                     <button
                       type="button"
                       onClick={() => setIsImageMode(!isImageMode)}
-                      className={`p-2.5 sm:p-3 rounded-xl transition-all relative group overflow-hidden ${isImageMode
-                        ? 'bg-gradient-to-r from-amber-400 via-yellow-500 to-amber-600 text-black shadow-[0_0_20px_rgba(251,191,36,0.4)] scale-105 active:scale-95'
-                        : theme === 'light' ? 'text-slate-400 hover:text-indigo-500 hover:bg-indigo-50' : 'text-slate-500 hover:text-indigo-400 hover:bg-white/5'
-                        }`}
-                      title={isImageMode ? "Switch to Text Mode" : "Switch to Image Mode"}
+                      className={`group relative flex items-center justify-center p-2.5 sm:p-3 rounded-2xl transition-all duration-500 overflow-hidden ${
+                        isImageMode 
+                          ? 'bg-gradient-to-br from-indigo-500 via-purple-600 to-pink-500 text-white shadow-[0_0_25px_rgba(139,92,246,0.5)] scale-110' 
+                          : 'bg-slate-800/40 text-slate-400 hover:text-white hover:bg-slate-800/60 border border-white/5'
+                      }`}
+                      title={isImageMode ? "Switch to Text Mode" : "Switch to Vision Mode"}
                     >
-                      <AnimatePresence>
-                        {isImageMode && (
-                          <motion.div
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            exit={{ opacity: 0 }}
-                            className="absolute inset-0 bg-white/20 animate-pulse"
-                          />
-                        )}
-                      </AnimatePresence>
-                      <ImageIcon className={`w-5 h-5 relative z-10 ${isImageMode ? 'animate-bounce' : ''}`} />
+                      {/* Holographic Glow Effect */}
+                      <div className={`absolute inset-0 transition-opacity duration-700 ${isImageMode ? 'opacity-100' : 'opacity-0'}`}>
+                        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.3)_0%,transparent_70%)] animate-pulse" />
+                        <div className="absolute top-[-50%] left-[-50%] w-[200%] h-[200%] bg-gradient-to-br from-transparent via-white/10 to-transparent rotate-45 animate-shimmer" style={{ animationDuration: '3s' }} />
+                      </div>
+
+                      <div className="relative z-10 flex items-center justify-center">
+                        <AnimatePresence mode="wait">
+                          {isImageMode ? (
+                            <motion.div
+                              key="vision"
+                              initial={{ scale: 0.5, rotate: -45, opacity: 0 }}
+                              animate={{ scale: 1, rotate: 0, opacity: 1 }}
+                              exit={{ scale: 0.5, rotate: 45, opacity: 0 }}
+                              transition={{ type: "spring", stiffness: 300, damping: 20 }}
+                            >
+                              <Sparkles className="w-5 h-5 text-amber-300 animate-pulse" />
+                            </motion.div>
+                          ) : (
+                            <motion.div
+                              key="text"
+                              initial={{ scale: 0.5, rotate: 45, opacity: 0 }}
+                              animate={{ scale: 1, rotate: 0, opacity: 1 }}
+                              exit={{ scale: 0.5, rotate: -45, opacity: 0 }}
+                              transition={{ type: "spring", stiffness: 300, damping: 20 }}
+                            >
+                              <ImageIcon className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+
+                      {/* Notification Dot */}
                       {!isImageMode && (
-                        <div className="absolute -top-1 -right-1 w-2 h-2 bg-amber-500 rounded-full animate-ping" />
+                        <span className="absolute top-1.5 right-1.5 flex h-2 w-2">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-500"></span>
+                        </span>
                       )}
                     </button>
                     <button
@@ -2458,6 +2553,92 @@ function App() {
           </AnimatePresence>
         </motion.main>
       </div>
+      {/* Vision Gallery Overlay */}
+      <AnimatePresence>
+        {isGalleryOpen && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 sm:p-8">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsGalleryOpen(false)}
+              className="absolute inset-0 bg-slate-950/90 backdrop-blur-2xl"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 40 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 40 }}
+              className="relative w-full max-w-6xl h-full max-h-[85vh] glass-panel rounded-[2rem] border border-white/10 overflow-hidden flex flex-col"
+            >
+              <div className="p-6 sm:p-8 border-b border-white/5 flex items-center justify-between bg-white/5">
+                <div className="flex items-center gap-4">
+                  <div className="p-3 rounded-2xl bg-indigo-500/20 text-indigo-400">
+                    <ImageIcon className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight">Vision Gallery</h2>
+                    <p className="text-sm text-slate-400 font-medium">All generated artistic visions</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setIsGalleryOpen(false)}
+                  className="p-3 rounded-2xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-all border border-white/5"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-6 sm:p-8 scrollbar-thin">
+                {chats.flatMap(chat => 
+                  chat.messages.filter(m => m.content.includes('![generated image]'))
+                ).length === 0 ? (
+                  <div className="h-full flex flex-col items-center justify-center text-center space-y-4 opacity-40">
+                    <ImageIcon className="w-16 h-16 text-slate-600" />
+                    <p className="text-lg font-medium text-slate-500">Your gallery is empty.<br/>Start generating visions to see them here.</p>
+                  </div>
+                ) : (
+                  <div className="columns-1 sm:columns-2 lg:columns-3 gap-6 space-y-6">
+                    {chats.flatMap(chat => 
+                      chat.messages.filter(m => m.content.includes('![generated image]'))
+                        .map((m, i) => {
+                          const match = m.content.match(/\((.*?)\)/);
+                          const url = match ? match[1] : null;
+                          if (!url) return null;
+                          return (
+                            <motion.div
+                              key={`${chat.id}-${i}`}
+                              initial={{ opacity: 0, y: 20 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              transition={{ delay: i * 0.05 }}
+                              className="relative group rounded-2xl overflow-hidden border border-white/10 break-inside-avoid"
+                            >
+                              <img src={url} alt="Gallery Vision" className="w-full h-auto object-cover transition-transform duration-700 group-hover:scale-110" />
+                              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-4">
+                                <p className="text-xs text-slate-300 font-medium mb-2 line-clamp-2 italic">From: {chat.title}</p>
+                                <button
+                                  onClick={() => {
+                                    const link = document.createElement('a');
+                                    link.href = url;
+                                    link.download = `sukhna-vision-${Date.now()}.png`;
+                                    link.click();
+                                  }}
+                                  className="w-full py-2 bg-indigo-500 text-white rounded-xl text-xs font-bold hover:bg-indigo-400 transition-all flex items-center justify-center gap-2"
+                                >
+                                  <Download className="w-3.5 h-3.5" />
+                                  Download Vision
+                                </button>
+                              </div>
+                            </motion.div>
+                          );
+                        })
+                    )}
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
