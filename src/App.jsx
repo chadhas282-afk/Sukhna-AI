@@ -67,21 +67,17 @@ const SukhnaCursor = ({ avatarImg }) => {
   const cursorX = useSpring(mouseX, springConfig);
   const cursorY = useSpring(mouseY, springConfig);
   const scale = useSpring(1, springConfig);
-  const rotate = useSpring(0, springConfig);
 
   useEffect(() => {
     const handleMove = (e) => {
       mouseX.set(e.clientX - 16);
       mouseY.set(e.clientY - 16);
     };
-
     const handleMouseDown = () => scale.set(0.8);
     const handleMouseUp = () => scale.set(1);
-
     window.addEventListener('mousemove', handleMove);
     window.addEventListener('mousedown', handleMouseDown);
     window.addEventListener('mouseup', handleMouseUp);
-
     return () => {
       window.removeEventListener('mousemove', handleMove);
       window.removeEventListener('mousedown', handleMouseDown);
@@ -92,12 +88,7 @@ const SukhnaCursor = ({ avatarImg }) => {
   return (
     <motion.div
       className="fixed top-0 left-0 w-8 h-8 z-[9999] pointer-events-none"
-      style={{
-        x: cursorX,
-        y: cursorY,
-        scale,
-        rotate,
-      }}
+      style={{ x: cursorX, y: cursorY, scale }}
     >
       <div className="relative w-full h-full">
         <div className="absolute inset-0 bg-indigo-500/40 rounded-full blur-md animate-pulse" />
@@ -111,81 +102,407 @@ const SukhnaCursor = ({ avatarImg }) => {
   );
 };
 
-const NeuralBackground = () => {
-  const canvasRef = useRef(null);
-  const [windowSize, setWindowSize] = useState({ width: window.innerWidth, height: window.innerHeight });
+const DeepCursor = () => {
+  const mouseX = useMotionValue(0);
+  const mouseY = useMotionValue(0);
+  const springConfig = { stiffness: 450, damping: 30, mass: 0.6 };
+  const cursorX = useSpring(mouseX, springConfig);
+  const cursorY = useSpring(mouseY, springConfig);
+  const scale = useSpring(1, springConfig);
 
   useEffect(() => {
-    const handleResize = () => setWindowSize({ width: window.innerWidth, height: window.innerHeight });
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+    const handleMove = (e) => {
+      mouseX.set(e.clientX - 12);
+      mouseY.set(e.clientY - 12);
+    };
+    const handleMouseDown = () => scale.set(0.7);
+    const handleMouseUp = () => scale.set(1);
+    window.addEventListener('mousemove', handleMove);
+    window.addEventListener('mousedown', handleMouseDown);
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMove);
+      window.removeEventListener('mousedown', handleMouseDown);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
   }, []);
+
+  return (
+    <motion.div
+      className="fixed top-0 left-0 w-6 h-6 z-[9999] pointer-events-none"
+      style={{ x: cursorX, y: cursorY, scale }}
+    >
+      <div className="relative w-full h-full flex items-center justify-center">
+        <div className="absolute inset-0 border-2 border-indigo-500/50 rounded-lg rotate-45 animate-[spin_4s_linear_infinite]" />
+        <div className="absolute inset-1 border border-cyan-400/40 rounded-full animate-[spin_2s_linear_infinite_reverse]" />
+        <div className="w-1.5 h-1.5 bg-white rounded-full shadow-[0_0_10px_#fff]" />
+      </div>
+    </motion.div>
+  );
+};
+
+const NeuralBackground = () => {
+  const canvasRef = useRef(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
-    let animationFrameId;
+    let animId;
+    let W = window.innerWidth, H = window.innerHeight;
+    canvas.width = W; canvas.height = H;
 
-    const particles = [];
-    const particleCount = 60;
-    const connectionDistance = 180;
+    const handleResize = () => {
+      W = window.innerWidth; H = window.innerHeight;
+      canvas.width = W; canvas.height = H;
+    };
+    window.addEventListener('resize', handleResize);
 
-    for (let i = 0; i < particleCount; i++) {
-      particles.push({
-        x: Math.random() * windowSize.width,
-        y: Math.random() * windowSize.height,
-        vx: (Math.random() - 0.5) * 0.4,
-        vy: (Math.random() - 0.5) * 0.4,
-        radius: Math.random() * 2 + 0.5
+    const nodes = [];
+    for (let i = 0; i < 80; i++) {
+      nodes.push({
+        x: Math.random() * W, y: Math.random() * H,
+        vx: (Math.random() - 0.5) * 0.35, vy: (Math.random() - 0.5) * 0.35,
+        r: 1.5 + Math.random() * 3,
+        hue: 220 + Math.random() * 60,
+        pulse: Math.random() * Math.PI * 2, pulseSpeed: 0.02 + Math.random() * 0.04,
       });
     }
 
-    const render = () => {
-      ctx.clearRect(0, 0, windowSize.width, windowSize.height);
-      
-      for (let i = 0; i < particles.length; i++) {
-        const p = particles[i];
-        p.x += p.vx;
-        p.y += p.vy;
-
-        if (p.x < 0 || p.x > windowSize.width) p.vx *= -1;
-        if (p.y < 0 || p.y > windowSize.height) p.vy *= -1;
-
-        ctx.fillStyle = 'rgba(99, 102, 241, 0.2)';
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
-        ctx.fill();
-
-        for (let j = i + 1; j < particles.length; j++) {
-          const p2 = particles[j];
-          const dx = p.x - p2.x;
-          const dy = p.y - p2.y;
-          const dist = Math.sqrt(dx * dx + dy * dy);
-
-          if (dist < connectionDistance) {
-            ctx.strokeStyle = `rgba(99, 102, 241, ${0.15 * (1 - dist / connectionDistance)})`;
-            ctx.lineWidth = 0.8;
-            ctx.beginPath();
-            ctx.moveTo(p.x, p.y);
-            ctx.lineTo(p2.x, p2.y);
-            ctx.stroke();
-          }
-        }
+    const packets = [];
+    const spawnPacket = (n1, n2) => {
+      if (packets.length < 25 && Math.random() < 0.003) {
+        packets.push({ from: n1, to: n2, t: 0, speed: 0.008 + Math.random() * 0.012, hue: 200 + Math.random() * 80 });
       }
-      animationFrameId = requestAnimationFrame(render);
     };
 
+    const waves = [];
+    const spawnWave = () => {
+      if (waves.length < 5 && Math.random() < 0.005) {
+        const n = nodes[Math.floor(Math.random() * nodes.length)];
+        waves.push({ x: n.x, y: n.y, r: 0, maxR: 120 + Math.random() * 100, speed: 1.2 + Math.random() * 1, hue: 230 + Math.random() * 50 });
+      }
+    };
+
+    const streams = [];
+    const COLS = Math.ceil(W / 80);
+    for (let c = 0; c < COLS; c++) {
+      streams.push({
+        x: c * 80 + Math.random() * 40,
+        chars: [],
+        speed: 0.4 + Math.random() * 0.8,
+        y: Math.random() * H,
+        len: 6 + Math.floor(Math.random() * 12),
+        hue: 220 + Math.random() * 80,
+      });
+    }
+
+    let frame = 0;
+    const render = () => {
+      frame++;
+      const t = frame * 0.01;
+
+      ctx.fillStyle = 'rgba(2,6,23,0.18)';
+      ctx.fillRect(0, 0, W, H);
+
+      const GRID = 90;
+      const vanishY = H * 0.45;
+      for (let gx = -2; gx <= Math.ceil(W / GRID) + 2; gx++) {
+        const wx = gx * GRID;
+        ctx.beginPath();
+        ctx.moveTo(wx, vanishY);
+        const spread = (wx - W / 2) * 2.5;
+        ctx.lineTo(W / 2 + spread, H);
+        ctx.strokeStyle = `rgba(99,102,241,${0.04 + Math.sin(t * 0.3 + gx * 0.5) * 0.02})`;
+        ctx.lineWidth = 0.5;
+        ctx.stroke();
+      }
+      for (let gy = 0; gy < 8; gy++) {
+        const frac = gy / 7;
+        const y = vanishY + (H - vanishY) * (frac * frac);
+        ctx.beginPath();
+        ctx.moveTo(0, y); ctx.lineTo(W, y);
+        ctx.strokeStyle = `rgba(99,102,241,${0.03 + frac * 0.04})`;
+        ctx.lineWidth = 0.5;
+        ctx.stroke();
+      }
+
+      streams.forEach(s => {
+        s.y += s.speed;
+        if (s.y > H + s.len * 14) s.y = -s.len * 14;
+        for (let i = 0; i < s.len; i++) {
+          const cy = s.y - i * 14;
+          if (cy < 0 || cy > H) continue;
+          const al = (1 - i / s.len) * 0.15;
+          ctx.fillStyle = `hsla(${s.hue}, 80%, 70%, ${al})`;
+          ctx.font = '10px monospace';
+          ctx.fillText(String.fromCharCode(0x30A0 + Math.floor(Math.random() * 96)), s.x, cy);
+        }
+      });
+
+      const CONN_DIST = 160;
+      for (let i = 0; i < nodes.length; i++) {
+        const n = nodes[i];
+        n.x += n.vx; n.y += n.vy;
+        if (n.x < 0 || n.x > W) n.vx *= -1;
+        if (n.y < 0 || n.y > H) n.vy *= -1;
+        n.pulse += n.pulseSpeed;
+
+        for (let j = i + 1; j < nodes.length; j++) {
+          const n2 = nodes[j];
+          const dx = n.x - n2.x, dy = n.y - n2.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist < CONN_DIST) {
+            const al = (1 - dist / CONN_DIST) * 0.2;
+            const grad = ctx.createLinearGradient(n.x, n.y, n2.x, n2.y);
+            grad.addColorStop(0, `hsla(${n.hue}, 80%, 65%, ${al})`);
+            grad.addColorStop(1, `hsla(${n2.hue}, 80%, 65%, ${al})`);
+            ctx.beginPath();
+            ctx.moveTo(n.x, n.y); ctx.lineTo(n2.x, n2.y);
+            ctx.strokeStyle = grad;
+            ctx.lineWidth = 0.8;
+            ctx.stroke();
+            spawnPacket(n, n2);
+          }
+        }
+
+        const glow = ctx.createRadialGradient(n.x, n.y, 0, n.x, n.y, n.r * 4);
+        glow.addColorStop(0, `hsla(${n.hue}, 85%, 70%, 0.5)`);
+        glow.addColorStop(1, 'transparent');
+        ctx.fillStyle = glow;
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, n.r * 4, 0, Math.PI * 2);
+        ctx.fill();
+
+        const pSize = Math.max(0.5, n.r * (0.7 + Math.sin(n.pulse) * 0.3));
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, pSize, 0, Math.PI * 2);
+        ctx.fillStyle = `hsla(${n.hue}, 90%, 80%, 0.9)`;
+        ctx.fill();
+
+        const hex = 6;
+        const hr = n.r * 5 + Math.sin(n.pulse) * 1.5;
+        ctx.beginPath();
+        for (let h = 0; h <= hex; h++) {
+          const ha = (h / hex) * Math.PI * 2 - Math.PI / 6 + n.pulse * 0.1;
+          const hx2 = n.x + Math.cos(ha) * hr;
+          const hy2 = n.y + Math.sin(ha) * hr;
+          h === 0 ? ctx.moveTo(hx2, hy2) : ctx.lineTo(hx2, hy2);
+        }
+        ctx.strokeStyle = `hsla(${n.hue}, 80%, 65%, ${0.06 + Math.sin(n.pulse) * 0.03})`;
+        ctx.lineWidth = 0.6;
+        ctx.stroke();
+      }
+
+      for (let i = packets.length - 1; i >= 0; i--) {
+        const p = packets[i];
+        p.t += p.speed;
+        if (p.t >= 1) { packets.splice(i, 1); continue; }
+        const px = p.from.x + (p.to.x - p.from.x) * p.t;
+        const py = p.from.y + (p.to.y - p.from.y) * p.t;
+        const tail = Math.max(0, p.t - 0.15);
+        const tx = p.from.x + (p.to.x - p.from.x) * tail;
+        const ty = p.from.y + (p.to.y - p.from.y) * tail;
+        const pg = ctx.createLinearGradient(tx, ty, px, py);
+        pg.addColorStop(0, 'transparent');
+        pg.addColorStop(1, `hsla(${p.hue}, 90%, 80%, 0.9)`);
+        ctx.beginPath();
+        ctx.moveTo(tx, ty); ctx.lineTo(px, py);
+        ctx.strokeStyle = pg;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(px, py, 2.5, 0, Math.PI * 2);
+        ctx.fillStyle = `hsla(${p.hue}, 90%, 90%, 1)`;
+        ctx.fill();
+      }
+
+      spawnWave();
+      for (let i = waves.length - 1; i >= 0; i--) {
+        const w = waves[i];
+        w.r += w.speed;
+        if (w.r > w.maxR) { waves.splice(i, 1); continue; }
+        const al = (1 - w.r / w.maxR) * 0.35;
+        ctx.beginPath();
+        ctx.arc(w.x, w.y, w.r, 0, Math.PI * 2);
+        ctx.strokeStyle = `hsla(${w.hue}, 85%, 70%, ${al})`;
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(w.x, w.y, Math.max(0, w.r - 8), 0, Math.PI * 2);
+        ctx.strokeStyle = `hsla(${w.hue + 30}, 70%, 80%, ${al * 0.4})`;
+        ctx.lineWidth = 0.5;
+        ctx.stroke();
+      }
+
+      if (frame % 180 < 3) {
+        ctx.fillStyle = `rgba(99,102,241,${0.04 - (frame % 180) * 0.013})`;
+        ctx.fillRect(0, 0, W, H);
+      }
+
+      animId = requestAnimationFrame(render);
+    };
     render();
-    return () => cancelAnimationFrame(animationFrameId);
-  }, [windowSize]);
+    return () => { cancelAnimationFrame(animId); window.removeEventListener('resize', handleResize); };
+  }, []);
+
+  return <canvas ref={canvasRef} className="fixed top-0 left-0 w-full h-full pointer-events-none z-0" style={{ opacity: 0.65 }} />;
+};
+
+
+const ParticleVortex = ({ progress }) => {
+  const canvasRef = useRef(null);
+  const particlesRef = useRef([]);
+  const frameRef = useRef(0);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const W = 280, H = 280;
+    canvas.width = W;
+    canvas.height = H;
+    const cx = W / 2, cy = H / 2;
+    let animId;
+
+    if (particlesRef.current.length === 0) {
+      for (let i = 0; i < 120; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const radius = 60 + Math.random() * 80;
+        particlesRef.current.push({
+          angle,
+          radius,
+          baseRadius: radius,
+          speed: 0.003 + Math.random() * 0.008,
+          size: 0.5 + Math.random() * 2,
+          hue: 230 + Math.random() * 60,
+          drift: (Math.random() - 0.5) * 0.2,
+          life: Math.random(),
+          trail: []
+        });
+      }
+    }
+
+    const render = () => {
+      frameRef.current++;
+      ctx.clearRect(0, 0, W, H);
+      const t = frameRef.current * 0.01;
+      const prog = progress / 100;
+
+      for (let r = 0; r < 3; r++) {
+        const ringR = 70 + r * 22;
+        const ringAlpha = 0.03 + prog * 0.06;
+        ctx.beginPath();
+        ctx.arc(cx, cy, ringR, 0, Math.PI * 2);
+        ctx.strokeStyle = `hsla(${240 + r * 20}, 80%, 70%, ${ringAlpha})`;
+        ctx.lineWidth = 0.5;
+        ctx.stroke();
+      }
+
+      if (prog > 0) {
+        const fieldLines = 6;
+        for (let i = 0; i < fieldLines; i++) {
+          const baseA = (i / fieldLines) * Math.PI * 2 + t * 0.3;
+          ctx.beginPath();
+          for (let s = 0; s < 40; s++) {
+            const frac = s / 40;
+            const spiralR = 30 + frac * 90 * prog;
+            const spiralA = baseA + frac * Math.PI * 1.5;
+            const fx = cx + Math.cos(spiralA) * spiralR;
+            const fy = cy + Math.sin(spiralA) * spiralR;
+            if (s === 0) ctx.moveTo(fx, fy);
+            else ctx.lineTo(fx, fy);
+          }
+          ctx.strokeStyle = `hsla(${250 + i * 15}, 70%, 65%, ${0.04 + prog * 0.08})`;
+          ctx.lineWidth = 1;
+          ctx.stroke();
+        }
+      }
+
+      particlesRef.current.forEach(p => {
+        p.angle += p.speed * (1 + prog * 2);
+        p.radius = p.baseRadius - prog * (p.baseRadius - 35) + Math.sin(t * 2 + p.life * 10) * 3;
+        p.life += 0.005;
+        if (p.life > 1) p.life = 0;
+
+        const px = cx + Math.cos(p.angle) * p.radius;
+        const py = cy + Math.sin(p.angle) * p.radius;
+
+        p.trail.push({ x: px, y: py });
+        if (p.trail.length > 8) p.trail.shift();
+
+        if (p.trail.length > 1) {
+          ctx.beginPath();
+          ctx.moveTo(p.trail[0].x, p.trail[0].y);
+          for (let ti = 1; ti < p.trail.length; ti++) {
+            ctx.lineTo(p.trail[ti].x, p.trail[ti].y);
+          }
+          ctx.strokeStyle = `hsla(${p.hue}, 80%, 70%, ${0.1 + prog * 0.15})`;
+          ctx.lineWidth = p.size * 0.5;
+          ctx.stroke();
+        }
+
+        const alpha = 0.3 + Math.sin(p.life * Math.PI) * 0.7;
+        const glow = p.size * (1.5 + prog);
+        ctx.beginPath();
+        ctx.arc(px, py, glow, 0, Math.PI * 2);
+        ctx.fillStyle = `hsla(${p.hue}, 80%, 70%, ${alpha * 0.15})`;
+        ctx.fill();
+
+        ctx.beginPath();
+        ctx.arc(px, py, p.size, 0, Math.PI * 2);
+        ctx.fillStyle = `hsla(${p.hue}, 90%, 80%, ${alpha})`;
+        ctx.fill();
+      });
+
+      const hexSides = 6;
+      const hexR = 55 + prog * 10 + Math.sin(t) * 3;
+      ctx.beginPath();
+      for (let i = 0; i <= hexSides; i++) {
+        const a = (i / hexSides) * Math.PI * 2 + t * 0.2;
+        const hx = cx + Math.cos(a) * hexR;
+        const hy = cy + Math.sin(a) * hexR;
+        if (i === 0) ctx.moveTo(hx, hy);
+        else ctx.lineTo(hx, hy);
+      }
+      ctx.strokeStyle = `hsla(260, 70%, 65%, ${0.08 + prog * 0.12})`;
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      const hexR2 = 75 + prog * 8 + Math.cos(t * 0.7) * 4;
+      ctx.beginPath();
+      for (let i = 0; i <= hexSides; i++) {
+        const a = (i / hexSides) * Math.PI * 2 - t * 0.15 + Math.PI / 6;
+        const hx = cx + Math.cos(a) * hexR2;
+        const hy = cy + Math.sin(a) * hexR2;
+        if (i === 0) ctx.moveTo(hx, hy);
+        else ctx.lineTo(hx, hy);
+      }
+      ctx.strokeStyle = `hsla(240, 60%, 60%, ${0.05 + prog * 0.1})`;
+      ctx.lineWidth = 0.8;
+      ctx.stroke();
+
+      if (prog > 0.5) {
+        const pulseR = 40 + (Math.sin(t * 3) + 1) * 20 * prog;
+        const pulseAlpha = (1 - (pulseR - 40) / 40) * 0.15 * prog;
+        ctx.beginPath();
+        ctx.arc(cx, cy, pulseR, 0, Math.PI * 2);
+        ctx.strokeStyle = `hsla(250, 80%, 75%, ${pulseAlpha})`;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+
+      animId = requestAnimationFrame(render);
+    };
+    render();
+    return () => cancelAnimationFrame(animId);
+  }, [progress]);
 
   return (
     <canvas
       ref={canvasRef}
-      width={windowSize.width}
-      height={windowSize.height}
-      className="fixed top-0 left-0 w-full h-full pointer-events-none opacity-40 z-0"
+      className="absolute inset-0 w-full h-full pointer-events-none"
+      style={{ zIndex: 5 }}
     />
   );
 };
@@ -204,7 +521,648 @@ const generateStars = (count) => {
 
 const starsSmall = generateStars(1000);
 const starsMedium = generateStars(300);
-const starsLarge = generateStars(100);
+
+const DeepSpaceEngine = () => {
+  const canvasRef = useRef(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    let animId;
+    let W = canvas.parentElement.clientWidth;
+    let H = canvas.parentElement.clientHeight;
+    canvas.width = W;
+    canvas.height = H;
+    const cx = W / 2, cy = H / 2;
+
+    const handleResize = () => {
+      W = canvas.parentElement.clientWidth;
+      H = canvas.parentElement.clientHeight;
+      canvas.width = W;
+      canvas.height = H;
+    };
+    window.addEventListener('resize', handleResize);
+
+    const stars = [];
+    for (let i = 0; i < 800; i++) {
+      stars.push({
+        x: Math.random() * W, y: Math.random() * H,
+        size: Math.random() * 2 + 0.3,
+        twinkleSpeed: 0.005 + Math.random() * 0.025,
+        twinkleOffset: Math.random() * Math.PI * 2,
+        hue: Math.random() > 0.75 ? 40 + Math.random() * 20 : 180 + Math.random() * 80,
+        sat: Math.random() > 0.6 ? 70 + Math.random() * 30 : 5 + Math.random() * 20,
+      });
+    }
+
+    const nebulae = [
+      { x: W * 0.15, y: H * 0.2,  r: 320, hue: 265, dx: 0.04, dy: 0.03 },
+      { x: W * 0.8,  y: H * 0.15, r: 280, hue: 290, dx: -0.03, dy: 0.04 },
+      { x: W * 0.6,  y: H * 0.75, r: 260, hue: 200, dx: 0.05, dy: -0.03 },
+      { x: W * 0.25, y: H * 0.7,  r: 300, hue: 330, dx: -0.04, dy: -0.02 },
+      { x: W * 0.5,  y: H * 0.5,  r: 380, hue: 240, dx: 0.02, dy: 0.02 },
+    ];
+
+    const shootingStars = [];
+    const spawn = () => {
+      if (shootingStars.length < 4 && Math.random() < 0.012) {
+        const a = Math.PI / 4 + (Math.random() - 0.5) * 0.6;
+        shootingStars.push({
+          x: Math.random() * W, y: Math.random() * H * 0.5,
+          vx: Math.cos(a) * (5 + Math.random() * 7),
+          vy: Math.sin(a) * (5 + Math.random() * 7),
+          life: 1, decay: 0.012 + Math.random() * 0.012,
+          len: 40 + Math.random() * 60, w: 1 + Math.random() * 2,
+        });
+      }
+    };
+
+    let frame = 0;
+    const render = () => {
+      frame++;
+      const t = frame * 0.01;
+
+      ctx.fillStyle = 'black';
+      ctx.fillRect(0, 0, W, H);
+
+      nebulae.forEach(n => {
+        n.x += n.dx; n.y += n.dy;
+        if (n.x < -n.r) n.x = W + n.r;
+        if (n.x > W + n.r) n.x = -n.r;
+        if (n.y < -n.r) n.y = H + n.r;
+        if (n.y > H + n.r) n.y = -n.r;
+        const pulse = 0.75 + Math.sin(t * 0.4 + n.hue) * 0.25;
+        const g = ctx.createRadialGradient(n.x, n.y, 0, n.x, n.y, n.r * pulse);
+        g.addColorStop(0,   `hsla(${n.hue},85%,45%,0.28)`);
+        g.addColorStop(0.3, `hsla(${n.hue+25},70%,30%,0.15)`);
+        g.addColorStop(0.65,`hsla(${n.hue+10},60%,20%,0.07)`);
+        g.addColorStop(1,   'transparent');
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, W, H);
+
+        for (let s = 0; s < 3; s++) {
+          const sa = (s / 3) * Math.PI * 2 + t * 0.08 + n.hue;
+          const sr = n.r * (0.4 + s * 0.15);
+          const sx = n.x + Math.cos(sa) * sr * 0.6;
+          const sy = n.y + Math.sin(sa) * sr * 0.35;
+          const sg = ctx.createRadialGradient(sx, sy, 0, sx, sy, n.r * 0.35);
+          sg.addColorStop(0,   `hsla(${n.hue+40},90%,60%,0.18)`);
+          sg.addColorStop(0.5, `hsla(${n.hue+60},70%,40%,0.08)`);
+          sg.addColorStop(1,   'transparent');
+          ctx.fillStyle = sg;
+          ctx.fillRect(0, 0, W, H);
+        }
+      });
+
+      stars.forEach(s => {
+        const tw = Math.max(0.01, 0.3 + Math.sin(t * s.twinkleSpeed * 10 + s.twinkleOffset) * 0.7);
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, Math.max(0.1, s.size * tw), 0, Math.PI * 2);
+        ctx.fillStyle = `hsla(${s.hue},${s.sat}%,92%,${Math.max(0, 0.5 + tw * 0.5)})`;
+        ctx.fill();
+        if (s.size > 1.3 && tw > 0.85) {
+          ctx.beginPath();
+          ctx.moveTo(s.x - s.size * 4, s.y); ctx.lineTo(s.x + s.size * 4, s.y);
+          ctx.moveTo(s.x, s.y - s.size * 4); ctx.lineTo(s.x, s.y + s.size * 4);
+          ctx.strokeStyle = `hsla(${s.hue},${s.sat}%,92%,${tw * 0.2})`;
+          ctx.lineWidth = 0.6;
+          ctx.stroke();
+        }
+      });
+
+      for (let arm = 0; arm < 2; arm++) {
+        const aOff = (arm / 2) * Math.PI * 2;
+        for (let j = 0; j < 150; j++) {
+          const frac = j / 150;
+          const r = 55 + frac * Math.min(W, H) * 0.42;
+          const ang = aOff + frac * Math.PI * 3.2 + t * 0.025;
+          const sx = cx + Math.cos(ang) * r;
+          const sy = cy + Math.sin(ang) * r * 0.5;
+          const al = (1 - frac) * 0.22 * (0.5 + Math.sin(t * 0.4 + frac * 6) * 0.5);
+          ctx.beginPath();
+          ctx.arc(sx, sy, Math.max(0.1, 1 + frac * 2.5), 0, Math.PI * 2);
+          ctx.fillStyle = `hsla(${arm === 0 ? 210 : 275},85%,78%,${Math.max(0, al)})`;
+          ctx.fill();
+        }
+      }
+
+      const numRays = 14;
+      for (let i = 0; i < numRays; i++) {
+        const ang = (i / numRays) * Math.PI * 2 + t * 0.06;
+        const rLen = 200 + Math.sin(t * 0.8 + i) * 50;
+        const x0 = cx + Math.cos(ang) * 20, y0 = cy + Math.sin(ang) * 20;
+        const x1 = cx + Math.cos(ang) * rLen, y1 = cy + Math.sin(ang) * rLen;
+        const rg = ctx.createLinearGradient(x0, y0, x1, y1);
+        rg.addColorStop(0, `rgba(255,210,90,${0.22 + Math.sin(t + i) * 0.08})`);
+        rg.addColorStop(1, 'transparent');
+        ctx.beginPath();
+        ctx.moveTo(x0, y0); ctx.lineTo(x1, y1);
+        ctx.strokeStyle = rg;
+        ctx.lineWidth = 2.5 + Math.sin(t * 0.7 + i) * 1.2;
+        ctx.stroke();
+      }
+
+      const cg = ctx.createRadialGradient(cx, cy, 0, cx, cy, 150);
+      cg.addColorStop(0,    'rgba(255,230,110,0.7)');
+      cg.addColorStop(0.12, 'rgba(255,160,50,0.45)');
+      cg.addColorStop(0.35, 'rgba(190,80,255,0.18)');
+      cg.addColorStop(0.7,  'rgba(80,120,255,0.07)');
+      cg.addColorStop(1,    'transparent');
+      ctx.fillStyle = cg;
+      ctx.fillRect(0, 0, W, H);
+
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(t * 0.5);
+      ctx.scale(1, 0.25);
+      const dg = ctx.createRadialGradient(0, 0, 22, 0, 0, 85);
+      dg.addColorStop(0,    'rgba(255,190,40,0.85)');
+      dg.addColorStop(0.35, 'rgba(255,110,20,0.55)');
+      dg.addColorStop(0.7,  'rgba(200,40,160,0.28)');
+      dg.addColorStop(1,    'transparent');
+      ctx.fillStyle = dg;
+      ctx.beginPath();
+      ctx.arc(0, 0, 85, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+
+      const bhGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, 55);
+      bhGrad.addColorStop(0,   'rgba(0,0,0,1)');
+      bhGrad.addColorStop(0.4, 'rgba(0,0,0,0.98)');
+      bhGrad.addColorStop(0.7, 'rgba(30,10,60,0.6)');
+      bhGrad.addColorStop(1,   'transparent');
+      ctx.fillStyle = bhGrad;
+      ctx.beginPath();
+      ctx.arc(cx, cy, 55, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(cx, cy, 20, 0, Math.PI * 2);
+      ctx.fillStyle = 'black';
+      ctx.fill();
+
+      spawn();
+      for (let i = shootingStars.length - 1; i >= 0; i--) {
+        const ss = shootingStars[i];
+        ss.x += ss.vx; ss.y += ss.vy; ss.life -= ss.decay;
+        if (ss.life <= 0) { shootingStars.splice(i, 1); continue; }
+        const spd = Math.sqrt(ss.vx * ss.vx + ss.vy * ss.vy);
+        const tx = ss.x - (ss.vx / spd) * ss.len * ss.life;
+        const ty = ss.y - (ss.vy / spd) * ss.len * ss.life;
+        const sg = ctx.createLinearGradient(tx, ty, ss.x, ss.y);
+        sg.addColorStop(0, 'rgba(255,255,255,0)');
+        sg.addColorStop(0.6, `rgba(180,200,255,${ss.life * 0.6})`);
+        sg.addColorStop(1, `rgba(255,255,255,${ss.life})`);
+        ctx.beginPath();
+        ctx.moveTo(tx, ty); ctx.lineTo(ss.x, ss.y);
+        ctx.strokeStyle = sg;
+        ctx.lineWidth = ss.w * ss.life;
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(ss.x, ss.y, ss.w * 2.5 * ss.life, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(255,255,255,${ss.life})`;
+        ctx.fill();
+      }
+
+      animId = requestAnimationFrame(render);
+    };
+    render();
+    return () => { cancelAnimationFrame(animId); window.removeEventListener('resize', handleResize); };
+  }, []);
+
+  return <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" style={{ zIndex: 0 }} />;
+};
+
+const FloraEngine = () => {
+  const canvasRef = useRef(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    let animId;
+    let W = canvas.parentElement.clientWidth;
+    let H = canvas.parentElement.clientHeight;
+    canvas.width = W; canvas.height = H;
+
+    const handleResize = () => {
+      W = canvas.parentElement.clientWidth;
+      H = canvas.parentElement.clientHeight;
+      canvas.width = W; canvas.height = H;
+    };
+    window.addEventListener('resize', handleResize);
+
+    const petals = [];
+    const PETAL_COLORS = ['#fda4af','#fbcfe8','#f9a8d4','#c4b5fd','#a5f3fc','#86efac','#fde68a','#fdba74'];
+    for (let i = 0; i < 50; i++) {
+      petals.push({
+        x: Math.random() * W, y: Math.random() * H - H,
+        vx: (Math.random() - 0.5) * 0.8, vy: 0.4 + Math.random() * 0.8,
+        rotation: Math.random() * Math.PI * 2, rotSpeed: (Math.random() - 0.5) * 0.04,
+        size: 4 + Math.random() * 10, opacity: 0.3 + Math.random() * 0.6,
+        color: PETAL_COLORS[Math.floor(Math.random() * PETAL_COLORS.length)],
+        swayAmp: 0.5 + Math.random() * 1.5, swayFreq: 0.01 + Math.random() * 0.02,
+        swayOff: Math.random() * Math.PI * 2,
+      });
+    }
+
+    const pollen = [];
+    for (let i = 0; i < 80; i++) {
+      pollen.push({
+        x: Math.random() * W, y: Math.random() * H,
+        vx: (Math.random() - 0.5) * 0.3, vy: -0.1 - Math.random() * 0.3,
+        size: 1 + Math.random() * 2.5,
+        hue: 60 + Math.random() * 80,
+        life: Math.random(), lifeSpeed: 0.003 + Math.random() * 0.006,
+        trail: [],
+      });
+    }
+
+    const drawPetal = (px, py, rot, sz, col, op) => {
+      ctx.save();
+      ctx.translate(px, py);
+      ctx.rotate(rot);
+      ctx.globalAlpha = op;
+      ctx.fillStyle = col;
+      ctx.beginPath();
+      ctx.moveTo(0, -sz);
+      ctx.bezierCurveTo(sz * 0.8, -sz * 0.5, sz * 0.8, sz * 0.5, 0, sz * 0.8);
+      ctx.bezierCurveTo(-sz * 0.8, sz * 0.5, -sz * 0.8, -sz * 0.5, 0, -sz);
+      ctx.fill();
+      ctx.globalAlpha = op * 0.4;
+      ctx.fillStyle = 'white';
+      ctx.beginPath();
+      ctx.moveTo(0, -sz * 0.8);
+      ctx.bezierCurveTo(sz * 0.2, -sz * 0.5, sz * 0.1, sz * 0.1, 0, sz * 0.3);
+      ctx.bezierCurveTo(-sz * 0.1, sz * 0.1, -sz * 0.2, -sz * 0.5, 0, -sz * 0.8);
+      ctx.fill();
+      ctx.restore();
+    };
+
+    const drawFlower = (fx, fy, sz, t, hue) => {
+      const petalCount = 6;
+      for (let p = 0; p < petalCount; p++) {
+        const a = (p / petalCount) * Math.PI * 2 + t;
+        const px = fx + Math.cos(a) * sz;
+        const py = fy + Math.sin(a) * sz;
+        ctx.save();
+        ctx.translate(px, py);
+        ctx.rotate(a + Math.PI / 2);
+        ctx.globalAlpha = 0.12;
+        ctx.fillStyle = `hsl(${hue + p * 15}, 80%, 75%)`;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, sz * 0.55, sz * 0.9, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+      ctx.beginPath();
+      ctx.arc(fx, fy, sz * 0.35, 0, Math.PI * 2);
+      ctx.fillStyle = `hsla(${hue + 30}, 90%, 75%, 0.25)`;
+      ctx.fill();
+    };
+
+    const flowers = [];
+    for (let i = 0; i < 12; i++) {
+      flowers.push({
+        x: (i / 12) * W + Math.random() * (W / 12),
+        y: H * 0.4 + Math.random() * H * 0.6,
+        size: 20 + Math.random() * 40,
+        hue: 280 + Math.random() * 100,
+        phase: Math.random() * Math.PI * 2,
+      });
+    }
+
+    let frame = 0;
+    const render = () => {
+      frame++;
+      const t = frame * 0.008;
+      ctx.clearRect(0, 0, W, H);
+
+      const sunX = W * 0.85, sunY = H * 0.1;
+      for (let r = 0; r < 8; r++) {
+        const rAngle = (r / 8) * Math.PI * 2 + t * 0.03;
+        const rLen = 180 + Math.sin(t * 0.5 + r) * 40;
+        const rg = ctx.createLinearGradient(sunX, sunY, sunX + Math.cos(rAngle) * rLen, sunY + Math.sin(rAngle) * rLen);
+        rg.addColorStop(0, `rgba(255,230,100,${0.15 + Math.sin(t + r) * 0.05})`);
+        rg.addColorStop(1, 'transparent');
+        ctx.beginPath();
+        ctx.moveTo(sunX, sunY);
+        ctx.lineTo(sunX + Math.cos(rAngle) * rLen, sunY + Math.sin(rAngle) * rLen);
+        ctx.strokeStyle = rg;
+        ctx.lineWidth = 3 + Math.sin(t + r) * 1.5;
+        ctx.stroke();
+      }
+      const sunGrad = ctx.createRadialGradient(sunX, sunY, 0, sunX, sunY, 120);
+      sunGrad.addColorStop(0, 'rgba(255,240,150,0.35)');
+      sunGrad.addColorStop(0.4, 'rgba(255,200,80,0.12)');
+      sunGrad.addColorStop(1, 'transparent');
+      ctx.fillStyle = sunGrad;
+      ctx.fillRect(0, 0, W, H);
+
+      for (let v = 0; v < 6; v++) {
+        const vx = (v / 5) * W;
+        ctx.beginPath();
+        ctx.moveTo(vx, H);
+        for (let step = 0; step <= 20; step++) {
+          const frac = step / 20;
+          const vy2 = H - frac * H * 0.55;
+          const vxWave = vx + Math.sin(frac * Math.PI * 3 + t * 0.5 + v) * (15 + v * 5);
+          ctx.lineTo(vxWave, vy2);
+        }
+        ctx.strokeStyle = `hsla(${130 + v * 15}, 55%, 35%, 0.1)`;
+        ctx.lineWidth = 1.5 + v * 0.5;
+        ctx.stroke();
+      }
+
+      flowers.forEach(fl => {
+        drawFlower(fl.x, fl.y, fl.size, t * 0.2 + fl.phase, fl.hue);
+      });
+
+      pollen.forEach(p => {
+        p.x += p.vx + Math.sin(t * 2 + p.life * 5) * 0.3;
+        p.y += p.vy;
+        p.life += p.lifeSpeed;
+        if (p.life > 1 || p.y < -10) { p.y = H + 5; p.x = Math.random() * W; p.life = 0; }
+        p.trail.push({ x: p.x, y: p.y });
+        if (p.trail.length > 5) p.trail.shift();
+        if (p.trail.length > 1) {
+          ctx.beginPath();
+          ctx.moveTo(p.trail[0].x, p.trail[0].y);
+          p.trail.forEach(pt => ctx.lineTo(pt.x, pt.y));
+          ctx.strokeStyle = `hsla(${p.hue}, 80%, 70%, 0.2)`;
+          ctx.lineWidth = p.size * 0.4;
+          ctx.stroke();
+        }
+        const al = Math.max(0, Math.sin(p.life * Math.PI));
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, Math.max(0.1, p.size * al), 0, Math.PI * 2);
+        ctx.fillStyle = `hsla(${p.hue}, 85%, 72%, ${al * 0.7})`;
+        ctx.fill();
+      });
+
+      petals.forEach(p => {
+        p.x += p.vx + Math.sin(t * p.swayFreq * 10 + p.swayOff) * p.swayAmp;
+        p.y += p.vy;
+        p.rotation += p.rotSpeed;
+        if (p.y > H + 20) { p.y = -20; p.x = Math.random() * W; }
+        drawPetal(p.x, p.y, p.rotation, p.size, p.color, p.opacity);
+      });
+
+      const shimmerY = H * 0.75;
+      for (let s = 0; s < 12; s++) {
+        const sx = (s / 11) * W;
+        const sw = W / 14;
+        const sAl = 0.04 + Math.abs(Math.sin(t * 1.5 + s * 0.8)) * 0.06;
+        ctx.fillStyle = `rgba(147,210,255,${sAl})`;
+        ctx.beginPath();
+        ctx.ellipse(sx, shimmerY + Math.sin(t + s) * 8, sw, 4, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      animId = requestAnimationFrame(render);
+    };
+    render();
+    return () => { cancelAnimationFrame(animId); window.removeEventListener('resize', handleResize); };
+  }, []);
+
+  return <canvas ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 1 }} />;
+};
+
+
+
+const SukhnaEngine = () => {
+  const canvasRef = useRef(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    let animId;
+    let W = window.innerWidth, H = window.innerHeight;
+    canvas.width = W; canvas.height = H;
+
+    const handleResize = () => {
+      W = window.innerWidth; H = window.innerHeight;
+      canvas.width = W; canvas.height = H;
+    };
+    window.addEventListener('resize', handleResize);
+
+    const particles = [];
+    for (let i = 0; i < 100; i++) {
+      particles.push({
+        x: Math.random() * W, y: Math.random() * H,
+        vx: (Math.random() - 0.5) * 0.4, vy: (Math.random() - 0.5) * 0.4,
+        size: 1 + Math.random() * 2,
+        hue: 220 + Math.random() * 40,
+        life: Math.random(),
+        speed: 0.002 + Math.random() * 0.005
+      });
+    }
+
+    const drawPlasma = (t) => {
+      const layers = 3;
+      for (let l = 0; l < layers; l++) {
+        ctx.beginPath();
+        const alpha = 0.03 + (l * 0.02);
+        ctx.fillStyle = `hsla(${230 + l * 20}, 80%, 60%, ${alpha})`;
+        
+        for (let x = 0; x <= W; x += 30) {
+          const yOffset = Math.sin(x * 0.002 + t * (0.5 + l * 0.2)) * (100 + l * 50);
+          const yBase = H * (0.3 + l * 0.2);
+          if (x === 0) ctx.moveTo(x, yBase + yOffset);
+          else ctx.lineTo(x, yBase + yOffset);
+        }
+        ctx.lineTo(W, H);
+        ctx.lineTo(0, H);
+        ctx.fill();
+      }
+    };
+
+    const drawGrid = (t) => {
+      ctx.strokeStyle = 'rgba(99, 102, 241, 0.05)';
+      ctx.lineWidth = 1;
+      const step = 60;
+      const vanishX = W / 2, vanishY = H / 2;
+
+      for (let i = -10; i <= 10; i++) {
+        ctx.beginPath();
+        ctx.moveTo(vanishX + i * step * 10, vanishY - 500);
+        ctx.lineTo(vanishX + i * step * 2, vanishY + 1000);
+        ctx.stroke();
+      }
+      for (let i = 0; i < 10; i++) {
+        const y = vanishY + Math.pow(i, 2) * 10;
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(W, y);
+        ctx.stroke();
+      }
+    };
+
+    let frame = 0;
+    const render = () => {
+      frame++;
+      const t = frame * 0.01;
+      ctx.fillStyle = 'rgba(2, 6, 23, 1)';
+      ctx.fillRect(0, 0, W, H);
+
+      drawGrid(t);
+      drawPlasma(t);
+
+      particles.forEach(p => {
+        p.x += p.vx; p.y += p.vy;
+        p.life += p.speed;
+        if (p.life > 1) p.life = 0;
+        if (p.x < 0 || p.x > W) p.vx *= -1;
+        if (p.y < 0 || p.y > H) p.vy *= -1;
+
+        const opacity = Math.sin(p.life * Math.PI) * 0.4;
+        const grad = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.size * 10);
+        grad.addColorStop(0, `hsla(${p.hue}, 90%, 70%, ${opacity})`);
+        grad.addColorStop(1, 'transparent');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size * 10, 0, Math.PI * 2);
+        ctx.fill();
+      });
+
+      if (frame % 300 < 5) {
+        ctx.fillStyle = 'rgba(99, 102, 241, 0.05)';
+        ctx.fillRect(0, 0, W, H);
+      }
+
+      animId = requestAnimationFrame(render);
+    };
+    render();
+    return () => { cancelAnimationFrame(animId); window.removeEventListener('resize', handleResize); };
+  }, []);
+
+  return <canvas ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 0 }} />;
+};
+
+const LightEngine = () => {
+  const canvasRef = useRef(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    let animId;
+    let W = window.innerWidth, H = window.innerHeight;
+    canvas.width = W; canvas.height = H;
+
+    const handleResize = () => {
+      W = window.innerWidth; H = window.innerHeight;
+      canvas.width = W; canvas.height = H;
+    };
+    window.addEventListener('resize', handleResize);
+
+    const blobs = [];
+    for (let i = 0; i < 6; i++) {
+      blobs.push({
+        x: Math.random() * W, y: Math.random() * H,
+        vx: (Math.random() - 0.5) * 0.2, vy: (Math.random() - 0.5) * 0.2,
+        r: 150 + Math.random() * 200,
+        hue: 200 + Math.random() * 40
+      });
+    }
+
+    const particles = [];
+    for (let i = 0; i < 40; i++) {
+      particles.push({
+        x: Math.random() * W, y: Math.random() * H,
+        vx: (Math.random() - 0.5) * 0.15, vy: (Math.random() - 0.5) * 0.15,
+        r: 1 + Math.random() * 2,
+        opacity: 0.1 + Math.random() * 0.2
+      });
+    }
+
+    let frame = 0;
+    const render = () => {
+      frame++;
+      const t = frame * 0.005;
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, W, H);
+
+      blobs.forEach(b => {
+        b.x += b.vx; b.y += b.vy;
+        if (b.x < -b.r) b.x = W + b.r; if (b.x > W + b.r) b.x = -b.r;
+        if (b.y < -b.r) b.y = H + b.r; if (b.y > H + b.r) b.y = -b.r;
+
+        const g = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, b.r);
+        g.addColorStop(0, 'rgba(240, 249, 255, 0.4)');
+        g.addColorStop(1, 'rgba(255, 255, 255, 0)');
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, W, H);
+      });
+
+      ctx.beginPath();
+      ctx.strokeStyle = 'rgba(0, 0, 0, 0.02)';
+      ctx.lineWidth = 1;
+      for (let i = 0; i < 3; i++) {
+        ctx.moveTo(0, H * 0.5 + Math.sin(t + i) * 100);
+        for (let x = 0; x < W; x += 50) {
+          ctx.lineTo(x, H * 0.5 + Math.sin(t + i + x * 0.001) * 100 + Math.cos(t * 0.5 + x * 0.002) * 50);
+        }
+        ctx.stroke();
+      }
+
+      particles.forEach(p => {
+        p.x += p.vx; p.y += p.vy;
+        if (p.x < 0) p.x = W; if (p.x > W) p.x = 0;
+        if (p.y < 0) p.y = H; if (p.y > H) p.y = 0;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(0, 0, 0, ${p.opacity})`;
+        ctx.fill();
+      });
+
+      animId = requestAnimationFrame(render);
+    };
+    render();
+    return () => { cancelAnimationFrame(animId); window.removeEventListener('resize', handleResize); };
+  }, []);
+
+  return <canvas ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 0 }} />;
+};
+
+const LightCursor = () => {
+  const mouseX = useMotionValue(0);
+  const mouseY = useMotionValue(0);
+  const springConfig = { stiffness: 600, damping: 40, mass: 0.4 };
+  const cursorX = useSpring(mouseX, springConfig);
+  const cursorY = useSpring(mouseY, springConfig);
+  const scale = useSpring(1, springConfig);
+
+  useEffect(() => {
+    const handleMove = (e) => {
+      mouseX.set(e.clientX - 10);
+      mouseY.set(e.clientY - 10);
+    };
+    const handleMouseDown = () => scale.set(0.6);
+    const handleMouseUp = () => scale.set(1);
+    window.addEventListener('mousemove', handleMove);
+    window.addEventListener('mousedown', handleMouseDown);
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMove);
+      window.removeEventListener('mousedown', handleMouseDown);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, []);
+
+  return (
+    <motion.div
+      className="fixed top-0 left-0 w-5 h-5 z-[9999] pointer-events-none"
+      style={{ x: cursorX, y: cursorY, scale }}
+    >
+      <div className="relative w-full h-full flex items-center justify-center">
+        <div className="absolute inset-0 border border-slate-900/20 rounded-full" />
+        <div className="w-1 h-1 bg-slate-900/60 rounded-full" />
+      </div>
+    </motion.div>
+  );
+};
 
 const CodeBlockWithCopy = ({ match, className, children, ...props }) => {
   const [isCopied, setIsCopied] = useState(false);
@@ -262,16 +1220,27 @@ const useIsMobile = () => {
   return isMobile;
 };
 
-const CursorTail = () => {
+const CursorTail = ({ color = "251, 191, 36", type = "smooth" }) => {
   const isMobile = useIsMobile();
   const canvasRef = useRef(null);
   const pointer = useRef({ x: -100, y: -100 });
   const trail = useRef([]);
+  const sparkles = useRef([]);
 
   useEffect(() => {
     if (isMobile) return;
     const handleMouseMove = (e) => {
       pointer.current = { x: e.clientX, y: e.clientY };
+      if (type === 'sparkle' && Math.random() > 0.6) {
+        sparkles.current.push({
+          x: e.clientX,
+          y: e.clientY,
+          vx: (Math.random() - 0.5) * 2,
+          vy: (Math.random() - 0.5) * 2,
+          life: 1,
+          size: Math.random() * 2 + 1
+        });
+      }
     };
     window.addEventListener("mousemove", handleMouseMove);
 
@@ -296,6 +1265,7 @@ const CursorTail = () => {
 
       if (trail.current.length > 1) {
         ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
 
         for (let i = 1; i < trail.current.length; i++) {
           const pt = trail.current[i];
@@ -306,9 +1276,26 @@ const CursorTail = () => {
           ctx.moveTo(prevPt.x, prevPt.y);
           ctx.lineTo(pt.x, pt.y);
 
-          ctx.lineWidth = progress * 6;
-          ctx.strokeStyle = `rgba(251, 191, 36, ${Math.pow(progress, 2)})`;
+          ctx.lineWidth = progress * (type === 'sparkle' ? 4 : 6);
+          ctx.strokeStyle = `rgba(${color}, ${Math.pow(progress, 2) * 0.8})`;
           ctx.stroke();
+        }
+      }
+
+      if (type === 'sparkle') {
+        for (let i = sparkles.current.length - 1; i >= 0; i--) {
+          const s = sparkles.current[i];
+          s.x += s.vx;
+          s.y += s.vy;
+          s.life -= 0.02;
+          if (s.life <= 0) {
+            sparkles.current.splice(i, 1);
+            continue;
+          }
+          ctx.beginPath();
+          ctx.arc(s.x, s.y, s.size * s.life, 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(${color}, ${s.life})`;
+          ctx.fill();
         }
       }
 
@@ -322,10 +1309,10 @@ const CursorTail = () => {
       window.removeEventListener("resize", resize);
       cancelAnimationFrame(animationFrameId);
     };
-  }, [isMobile]);
+  }, [isMobile, color, type]);
 
   if (isMobile) return null;
-  return <canvas ref={canvasRef} className="fixed inset-0 pointer-events-none z-50 blur-[1px]" />;
+  return <canvas ref={canvasRef} className="fixed inset-0 pointer-events-none z-[100] blur-[0.5px]" />;
 };
 
 function App() {
@@ -1249,23 +2236,14 @@ function App() {
     <div
       onMouseMove={handleMouseMove}
       className={`h-[100dvh] w-screen overflow-hidden flex font-sans relative ${theme === 'sukhna' ? 'selection:bg-indigo-500/30 sukhna-cursor bg-slate-950 text-white'
-        : theme === 'galaxy' ? 'selection:bg-amber-500/30 galaxy-cursor bg-slate-900 text-white'
-          : theme === 'flora' ? 'selection:bg-blue-500/30 flora-cursor text-white'
-            : theme === 'light' ? 'selection:bg-indigo-300/40 bg-gradient-to-br from-slate-50 via-white to-slate-100 text-slate-800'
-              : 'selection:bg-indigo-500/30 bg-slate-900 text-white'
+        : theme === 'galaxy' ? 'selection:bg-amber-500/30 galaxy-cursor bg-slate-900 text-amber-50'
+          : theme === 'flora' ? 'selection:bg-blue-500/30 flora-cursor text-black'
+            : theme === 'light' ? 'selection:bg-slate-200 bg-white text-black'
+              : 'selection:bg-indigo-500/30 bg-slate-900 text-slate-200'
         }`}
-      style={{ cursor: theme === 'sukhna' ? 'none' : 'default' }}
+      style={{ cursor: (theme === 'sukhna' || theme === 'default' || theme === 'light') ? 'none' : 'default' }}
     >
-      {theme === 'flora' && (
-        <motion.div
-          className="absolute inset-0 z-0"
-          style={{
-            background: `linear-gradient(180deg, #ffffff 0%, #e0f2fe 50%, #6495ed 100%)`,
-            backgroundSize: '100% 200%',
-            backgroundPositionY: floraGradient
-          }}
-        />
-      )}
+
 
 
       <AnimatePresence>
@@ -1386,18 +2364,18 @@ function App() {
         transition={{ type: "spring", damping: 25, stiffness: 200 }}
         className={`fixed lg:relative top-0 left-0 h-full z-50 flex flex-col overflow-hidden shadow-2xl transition-colors duration-500 ${theme === 'galaxy'
           ? 'bg-black/60 backdrop-blur-xl border-r border-amber-500/20'
-          : theme === 'flora'
-            ? 'flora-glass border-r border-blue-500/20'
-            : theme === 'light'
-              ? 'light-glass border-r border-slate-200/60'
+            : theme === 'flora'
+              ? 'bg-white border-r border-blue-200'
+              : theme === 'light'
+              ? 'bg-white border-r border-slate-200'
               : 'glass-panel border-r border-slate-700/50'
           }`}
       >
-        <div className={`p-6 border-b flex items-center justify-between transition-colors duration-500 ${theme === 'galaxy' ? 'border-amber-500/20' : theme === 'flora' ? 'border-blue-500/10' : theme === 'light' ? 'border-slate-200/60' : 'border-slate-700/50'
+        <div className={`p-6 border-b flex items-center justify-between transition-colors duration-500 ${theme === 'galaxy' ? 'border-amber-500/20' : theme === 'flora' ? 'border-blue-200' : theme === 'light' ? 'border-slate-200' : 'border-slate-700/50'
           }`}>
           <h2 className="font-bold text-lg flex items-center gap-2">
             <MessageSquare className={`w-5 h-5 ${theme === 'galaxy' ? 'text-amber-400' : theme === 'flora' ? 'text-blue-600' : theme === 'light' ? 'text-indigo-500' : 'text-indigo-400'}`} />
-            <span className={theme === 'galaxy' ? 'text-amber-200' : theme === 'flora' ? 'text-blue-900' : theme === 'light' ? 'text-slate-700' : 'text-slate-200'}>History</span>
+            <span className={theme === 'galaxy' ? 'text-amber-200' : theme === 'flora' ? 'text-black font-bold' : theme === 'light' ? 'text-black' : 'text-slate-200'}>History</span>
           </h2>
           <button
             onClick={() => setIsSidebarOpen(false)}
@@ -1465,7 +2443,7 @@ function App() {
           )}
         </div>
 
-        <div className={`p-4 border-t transition-colors duration-500 ${theme === 'galaxy' ? 'border-amber-500/20' : theme === 'light' ? 'border-slate-200/60' : 'border-slate-700/50'
+        <div className={`p-4 border-t transition-colors duration-500 ${theme === 'galaxy' ? 'border-amber-500/20' : theme === 'light' ? 'border-slate-200' : 'border-slate-700/50'
           }`}>
 
           <button
@@ -1491,11 +2469,27 @@ function App() {
       </motion.aside>
 
       <div className="flex-1 flex flex-col min-w-0 relative h-full overflow-hidden">
-        <NeuralBackground />
-        <motion.div
-          className="absolute inset-0 z-0 bg-gradient-to-br from-indigo-900/40 via-purple-900/30 to-slate-900 pointer-events-none transition-opacity duration-1000"
-          style={{ opacity: theme === 'default' ? gradientOpacity : 0 }}
-        />
+        {theme === 'default' && <NeuralBackground />}
+        {theme === 'flora' && (
+          <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
+            <div className="absolute inset-0" style={{ background: 'linear-gradient(160deg, #fff0f6 0%, #fce7f3 20%, #ede9fe 45%, #dbeafe 70%, #e0f2fe 100%)' }} />
+            <FloraEngine />
+            <div className="absolute inset-0" style={{ background: 'radial-gradient(ellipse at 80% 10%, rgba(255,220,240,0.4) 0%, transparent 55%), radial-gradient(ellipse at 20% 90%, rgba(186,230,253,0.35) 0%, transparent 55%)' }} />
+          </div>
+        )}
+
+        {theme === 'light' && (
+          <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
+            <LightEngine />
+          </div>
+        )}
+
+        {theme === 'default' && (
+          <motion.div
+            className="absolute inset-0 z-0 bg-gradient-to-br from-indigo-900/40 via-purple-900/30 to-slate-900 pointer-events-none transition-opacity duration-1000"
+            style={{ opacity: gradientOpacity }}
+          />
+        )}
 
         {theme === 'default' && showBubbles && (
           <div className="bubbles-container">
@@ -1526,9 +2520,11 @@ function App() {
         <div
           className={`absolute inset-0 z-0 pointer-events-none transition-opacity duration-1000 overflow-hidden flex items-center justify-center bg-black ${theme === 'galaxy' ? 'opacity-100' : 'opacity-0'}`}
         >
+          {theme === 'galaxy' && <DeepSpaceEngine />}
+
           <div className="absolute w-full h-full">
-            <div className="absolute w-[1px] h-[1px] rounded-full opacity-60" style={{ boxShadow: starsSmall, top: '50%', left: '50%' }} />
-            <div className="absolute w-[2px] h-[2px] rounded-full opacity-70" style={{ boxShadow: starsMedium, top: '50%', left: '50%' }} />
+            <div className="absolute w-[1px] h-[1px] rounded-full opacity-40" style={{ boxShadow: starsSmall, top: '50%', left: '50%' }} />
+            <div className="absolute w-[2px] h-[2px] rounded-full opacity-50" style={{ boxShadow: starsMedium, top: '50%', left: '50%' }} />
           </div>
 
           <div className="absolute" style={{ width: 0, height: 0, top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}>
@@ -1629,6 +2625,7 @@ function App() {
 
         {theme === 'sukhna' && (
           <div className="absolute inset-0 z-0 overflow-hidden bg-[#020617]" style={{ perspective: isMobile || performanceMode === 'lite' ? '2000px' : '800px' }}>
+            <SukhnaEngine />
             {performanceMode === 'ultra' && !isMobile && (
               <>
                 <motion.div
@@ -1702,6 +2699,10 @@ function App() {
         )}
 
         {theme === 'galaxy' && <CursorTail />}
+        {theme === 'default' && <DeepCursor />}
+        {theme === 'default' && <CursorTail color="99, 102, 241" />}
+        {theme === 'light' && <LightCursor />}
+        {theme === 'light' && <CursorTail color="217, 119, 6" type="sparkle" />}
         {theme === 'sukhna' && <SukhnaCursor avatarImg={avatarImg} />}
         {theme === 'sukhna' && <CursorTail color="99, 102, 241" />}
 
@@ -1739,7 +2740,7 @@ function App() {
           </>
         )}
 
-        <header className={`${theme === 'flora' ? 'flora-glass border-b border-blue-500/10' : theme === 'light' ? 'light-glass border-b border-slate-200/50' : 'glass-panel'} sticky top-0 z-30 px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between shadow-lg gap-2`}>
+        <header className={`${theme === 'flora' ? 'bg-white border-b border-blue-100' : theme === 'light' ? 'bg-white/80 backdrop-blur-md border-b border-slate-200' : 'glass-panel'} sticky top-0 z-30 px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between shadow-lg gap-2`}>
           <div className="flex items-center gap-2 sm:gap-4">
             <button
               onClick={() => setIsSidebarOpen(!isSidebarOpen)}
@@ -1781,7 +2782,7 @@ function App() {
                     </span>
                   )}
                 </div>
-                <p className={`text-[10px] sm:text-xs flex items-center gap-1.5 ${theme === 'light' ? 'text-slate-500' : 'text-slate-400'}`}>
+                <p className={`text-[10px] sm:text-xs flex items-center gap-1.5 ${theme === 'galaxy' ? 'text-amber-400/80' : theme === 'flora' || theme === 'light' ? 'text-slate-700' : 'text-slate-400'}`}>
                   <span className="relative flex h-2 w-2">
                     {isEngineReady ? (
                       <>
@@ -1923,65 +2924,216 @@ function App() {
                                 </div>
                               </div>
                             ) : (
-                              <div className="relative w-36 h-36 mx-auto mb-6">
-                                <div
-                                  className="absolute inset-0 rounded-full blur-2xl transition-all duration-500"
+                              <div className="relative w-[280px] h-[280px] mx-auto mb-10" style={{ perspective: '800px' }}>
+
+                                <ParticleVortex progress={loadingProgress.progress} />
+
+                                <motion.div
+                                  className="absolute inset-[-10px] rounded-full"
                                   style={{
-                                    background: `radial-gradient(circle, rgba(99,102,241,${loadingProgress.progress / 200}) 0%, transparent 70%)`,
-                                    transform: `scale(${1 + loadingProgress.progress / 200})`
+                                    background: `radial-gradient(circle, rgba(99,102,241,${loadingProgress.progress / 120}) 0%, rgba(139,92,246,${loadingProgress.progress / 250}) 35%, rgba(168,85,247,${loadingProgress.progress / 500}) 60%, transparent 75%)`,
                                   }}
+                                  animate={{ 
+                                    filter: ['blur(25px)', 'blur(40px)', 'blur(25px)'],
+                                    scale: [1, 1.15, 1],
+                                  }}
+                                  transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
                                 />
 
-                                <div className="relative w-full h-full rounded-3xl overflow-hidden border border-indigo-500/20 shadow-2xl shadow-indigo-500/10 bg-slate-900">
+                                {[...Array(5)].map((_, i) => (
+                                  <motion.div
+                                    key={`ring-${i}`}
+                                    className="absolute rounded-full"
+                                    style={{
+                                      inset: `${-15 - i * 12}px`,
+                                      border: `${i === 0 ? 2 : 1}px ${i % 2 === 0 ? 'solid' : i % 3 === 0 ? 'dashed' : 'dotted'} rgba(${130 + i * 20},${80 + i * 10},${241 - i * 10},${0.06 + loadingProgress.progress / (500 + i * 100)})`,
+                                      transformStyle: 'preserve-3d',
+                                      transform: `rotateX(${60 + i * 8}deg) rotateZ(${i * 30}deg)`,
+                                    }}
+                                    animate={{ rotateZ: [i * 30, i * 30 + (i % 2 === 0 ? 360 : -360)] }}
+                                    transition={{ duration: 10 + i * 4, repeat: Infinity, ease: "linear" }}
+                                  />
+                                ))}
+
+                                {[...Array(12)].map((_, i) => {
+                                  const orbitR = 115 + (i % 3) * 15;
+                                  const startAngle = (i / 12) * Math.PI * 2;
+                                  return (
+                                    <motion.div
+                                      key={`node-${i}`}
+                                      className="absolute rounded-full"
+                                      style={{
+                                        width: 3 + (i % 3) * 2,
+                                        height: 3 + (i % 3) * 2,
+                                        background: `hsl(${230 + i * 10}, 85%, 75%)`,
+                                        boxShadow: `0 0 ${6 + i}px hsl(${230 + i * 10}, 85%, 70%)`,
+                                        top: '50%',
+                                        left: '50%',
+                                      }}
+                                      animate={{
+                                        x: [
+                                          Math.cos(startAngle) * orbitR,
+                                          Math.cos(startAngle + Math.PI * 2) * orbitR
+                                        ],
+                                        y: [
+                                          Math.sin(startAngle) * orbitR,
+                                          Math.sin(startAngle + Math.PI * 2) * orbitR
+                                        ],
+                                        scale: [0.6, 1.5, 0.6],
+                                        opacity: [0.3, 1, 0.3]
+                                      }}
+                                      transition={{
+                                        x: { duration: 5 + i * 0.4, repeat: Infinity, ease: "linear" },
+                                        y: { duration: 5 + i * 0.4, repeat: Infinity, ease: "linear" },
+                                        scale: { duration: 1.5 + i * 0.15, repeat: Infinity, ease: "easeInOut", delay: i * 0.2 },
+                                        opacity: { duration: 1.5 + i * 0.15, repeat: Infinity, ease: "easeInOut", delay: i * 0.2 }
+                                      }}
+                                    />
+                                  );
+                                })}
+
+                                <motion.div
+                                  className="absolute inset-[50px] rounded-[1.8rem] overflow-hidden"
+                                  style={{
+                                    boxShadow: `
+                                      0 0 ${15 + loadingProgress.progress / 2}px rgba(99,102,241,${loadingProgress.progress / 200}),
+                                      0 0 ${30 + loadingProgress.progress}px rgba(139,92,246,${loadingProgress.progress / 350}),
+                                      0 0 ${50 + loadingProgress.progress * 1.5}px rgba(168,85,247,${loadingProgress.progress / 600}),
+                                      inset 0 0 40px rgba(0,0,0,0.6)
+                                    `,
+                                    zIndex: 10,
+                                  }}
+                                  animate={{
+                                    borderColor: [
+                                      'rgba(99,102,241,0.4)',
+                                      'rgba(139,92,246,0.6)',
+                                      'rgba(168,85,247,0.4)',
+                                      'rgba(99,102,241,0.4)'
+                                    ]
+                                  }}
+                                  transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+                                >
+                                  <div className="absolute inset-0 bg-slate-950" />
+                                  <motion.div
+                                    className="absolute inset-[-2px] rounded-[1.8rem]"
+                                    style={{
+                                      background: 'conic-gradient(from 0deg, rgba(99,102,241,0.4), rgba(139,92,246,0.2), rgba(168,85,247,0.4), rgba(99,102,241,0.2), rgba(139,92,246,0.4))',
+                                      padding: '2px',
+                                      WebkitMask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
+                                      WebkitMaskComposite: 'xor',
+                                      maskComposite: 'exclude',
+                                    }}
+                                    animate={{ rotate: [0, 360] }}
+                                    transition={{ duration: 6, repeat: Infinity, ease: "linear" }}
+                                  />
 
                                   <img
                                     src={avatarImg}
-                                    alt="Sukhna-AI base"
-                                    className="absolute inset-0 w-full h-full object-cover grayscale opacity-20"
+                                    alt="Sukhna-AI ghost"
+                                    className="absolute inset-0 w-full h-full object-cover"
+                                    style={{ filter: 'grayscale(100%) brightness(0.25)', opacity: 0.2 }}
                                   />
 
                                   <div
-                                    className="absolute inset-0 overflow-hidden transition-all duration-700 ease-out"
-                                    style={{
-                                      clipPath: `inset(${100 - loadingProgress.progress}% 0 0 0)`,
-                                    }}
+                                    className="absolute inset-0 overflow-hidden transition-all duration-500 ease-out"
+                                    style={{ clipPath: `inset(${100 - loadingProgress.progress}% 0 0 0)` }}
                                   >
                                     <img
                                       src={avatarImg}
                                       alt="Sukhna-AI"
                                       className="w-full h-full object-cover"
+                                      style={{ filter: 'saturate(1.3) contrast(1.1) brightness(1.05)' }}
                                     />
+                                    <div className="absolute inset-0 bg-gradient-to-t from-indigo-600/25 via-transparent to-purple-500/15" />
+                                    <div className="absolute inset-0 bg-gradient-to-b from-transparent via-indigo-400/5 to-transparent" />
                                   </div>
 
                                   {loadingProgress.progress < 100 && loadingProgress.progress > 0 && (
-                                    <motion.div
-                                      className="absolute left-0 right-0 h-[3px] pointer-events-none"
-                                      style={{ top: `${100 - loadingProgress.progress}%` }}
-                                      animate={{ opacity: [0.6, 1, 0.6] }}
-                                      transition={{ duration: 0.8, repeat: Infinity }}
-                                    >
-                                      <div className="w-full h-full bg-gradient-to-r from-transparent via-indigo-400 to-transparent" />
-                                      <div className="absolute inset-x-0 -top-2 h-4 bg-indigo-500/15 blur-sm" />
-                                    </motion.div>
-                                  )}
+                                    <>
+                                      <motion.div
+                                        className="absolute left-0 right-0 h-[2px] pointer-events-none"
+                                        style={{ top: `${100 - loadingProgress.progress}%`, zIndex: 20 }}
+                                        animate={{ opacity: [0.4, 1, 0.4] }}
+                                        transition={{ duration: 0.5, repeat: Infinity }}
+                                      >
+                                        <div className="w-full h-full bg-gradient-to-r from-transparent via-white to-transparent" />
+                                        <div className="absolute inset-x-0 -top-4 h-8 bg-indigo-400/20 blur-lg" />
+                                        <div className="absolute inset-x-0 -bottom-4 h-8 bg-purple-400/15 blur-lg" />
+                                      </motion.div>
 
+                                      <motion.div
+                                        className="absolute inset-0 pointer-events-none"
+                                        style={{
+                                          background: 'repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(99,102,241,0.02) 2px, rgba(99,102,241,0.02) 3px)',
+                                          zIndex: 15,
+                                        }}
+                                        animate={{ y: [0, 6, 0] }}
+                                        transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
+                                      />
+
+                                      <motion.div
+                                        className="absolute inset-0 pointer-events-none overflow-hidden"
+                                        style={{ zIndex: 16, mixBlendMode: 'screen' }}
+                                      >
+                                        <motion.div
+                                          className="absolute w-full h-[30%]"
+                                          style={{
+                                            background: 'linear-gradient(180deg, transparent 0%, rgba(99,102,241,0.06) 30%, rgba(139,92,246,0.04) 70%, transparent 100%)',
+                                          }}
+                                          animate={{ top: ['-30%', '130%'] }}
+                                          transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
+                                        />
+                                      </motion.div>
+                                    </>
+                                  )}
 
                                   {loadingProgress.progress >= 100 && (
-                                    <motion.div
-                                      className="absolute inset-0 bg-indigo-400/30 rounded-3xl"
-                                      initial={{ opacity: 1 }}
-                                      animate={{ opacity: 0 }}
-                                      transition={{ duration: 1, ease: "easeOut" }}
-                                    />
+                                    <>
+                                      <motion.div
+                                        className="absolute inset-0"
+                                        style={{
+                                          background: 'radial-gradient(circle at center, rgba(255,255,255,0.5) 0%, rgba(99,102,241,0.3) 30%, transparent 70%)',
+                                          zIndex: 20,
+                                        }}
+                                        initial={{ opacity: 1, scale: 0.8 }}
+                                        animate={{ opacity: 0, scale: 2.5 }}
+                                        transition={{ duration: 2, ease: "easeOut" }}
+                                      />
+                                      <motion.div
+                                        className="absolute inset-0"
+                                        style={{
+                                          background: 'conic-gradient(from 0deg, transparent 0%, rgba(99,102,241,0.3) 25%, transparent 50%, rgba(139,92,246,0.3) 75%, transparent 100%)',
+                                          zIndex: 19,
+                                        }}
+                                        initial={{ opacity: 0.8, rotate: 0 }}
+                                        animate={{ opacity: 0, rotate: 180, scale: 2 }}
+                                        transition={{ duration: 2.5, ease: "easeOut" }}
+                                      />
+                                    </>
                                   )}
-                                </div>
-
+                                </motion.div>
 
                                 <motion.div
-                                  className="absolute -bottom-3 left-1/2 -translate-x-1/2 bg-indigo-600 text-white text-[10px] font-bold px-2.5 py-0.5 rounded-full shadow-lg shadow-indigo-500/30 tabular-nums"
-                                  initial={{ opacity: 0, y: 4 }}
-                                  animate={{ opacity: 1, y: 0 }}
-                                  transition={{ delay: 0.5 }}
+                                  className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-white text-sm font-black px-5 py-1.5 rounded-full tabular-nums tracking-widest"
+                                  style={{
+                                    background: 'linear-gradient(135deg, #4f46e5, #7c3aed, #a855f7, #7c3aed, #4f46e5)',
+                                    backgroundSize: '200% 200%',
+                                    boxShadow: '0 4px 20px rgba(99,102,241,0.5), 0 0 30px rgba(139,92,246,0.3), 0 0 60px rgba(168,85,247,0.1)',
+                                    zIndex: 20,
+                                  }}
+                                  initial={{ opacity: 0, y: 10, scale: 0.7 }}
+                                  animate={{
+                                    opacity: 1,
+                                    y: 0,
+                                    scale: 1,
+                                    backgroundPosition: ['0% 50%', '100% 50%', '0% 50%']
+                                  }}
+                                  transition={{
+                                    opacity: { delay: 0.2, duration: 0.5 },
+                                    y: { delay: 0.2, type: "spring", stiffness: 300, damping: 15 },
+                                    scale: { delay: 0.2, type: "spring", stiffness: 300, damping: 15 },
+                                    backgroundPosition: { duration: 3, repeat: Infinity, ease: "linear" }
+                                  }}
                                 >
                                   {loadingProgress.progress}%
                                 </motion.div>
@@ -2057,9 +3209,12 @@ function App() {
 
                         <div className={`p-3 sm:p-4 rounded-2xl shadow-md min-w-0 ${message.role === 'user'
                           ? (theme === 'galaxy' ? 'bg-gradient-to-br from-amber-500 to-yellow-600 text-black rounded-tr-sm' : theme === 'flora' ? 'message-bubble-flora-user text-white rounded-tr-sm' : 'message-bubble-user text-white rounded-tr-sm')
-                          : (theme === 'light' ? 'message-bubble-light-ai rounded-tl-sm' : 'message-bubble-ai text-slate-200 rounded-tl-sm')
+                          : (theme === 'light' ? 'message-bubble-light-ai rounded-tl-sm text-black' 
+                              : theme === 'galaxy' ? 'bg-slate-950/80 border border-amber-500/20 text-amber-50 rounded-tl-sm shadow-[0_0_15px_rgba(245,158,11,0.05)]'
+                              : theme === 'flora' ? 'bg-blue-50/90 border border-blue-200 text-black rounded-tl-sm'
+                              : 'message-bubble-ai text-slate-200 rounded-tl-sm')
                           }`}>
-                          <div className={`text-sm leading-relaxed min-w-0 max-w-full overflow-x-auto break-words prose ${theme === 'light' ? 'prose-slate' : 'prose-invert'}`}>
+                          <div className={`text-sm leading-relaxed min-w-0 max-w-full overflow-x-auto break-words prose ${theme === 'light' || theme === 'flora' ? 'prose-slate text-black' : 'prose-invert'}`}>
                             {message.isImage && message.imageUrl && (
                               <div className="relative group mb-4 rounded-xl overflow-hidden border border-white/10 shadow-xl bg-slate-900/50">
                                 <img
@@ -2132,8 +3287,8 @@ function App() {
                                 onClick={() => copyResponse(message.content, index)}
                                 className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs transition-all ${theme === 'galaxy'
                                   ? 'text-black/60 hover:text-black hover:bg-black/5'
-                                  : theme === 'flora'
-                                    ? 'text-white/60 hover:text-white hover:bg-white/10'
+                                  : theme === 'flora' || theme === 'light'
+                                    ? 'text-black hover:bg-slate-200 border border-slate-200 shadow-sm'
                                     : 'text-white/60 hover:text-white hover:bg-white/10'
                                   }`}
                                 title="Copy query"
@@ -2153,7 +3308,9 @@ function App() {
                                   e.stopPropagation();
                                   copyResponse(message.content, index);
                                 }}
-                                className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium bg-slate-800/40 text-slate-400 hover:text-white hover:bg-slate-700/60 transition-all border border-white/5 active:scale-95 touch-manipulation"
+                                className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium transition-all border active:scale-95 touch-manipulation ${theme === 'flora' || theme === 'light'
+                                  ? 'bg-white text-black hover:bg-slate-100 border-slate-200 shadow-sm'
+                                  : 'bg-slate-800/40 text-slate-400 hover:text-white hover:bg-slate-700/60 border-white/5'}`}
                                 title="Copy response"
                               >
                                 {copiedMessageId === index ? (
@@ -2167,7 +3324,9 @@ function App() {
                                   e.stopPropagation();
                                   speakResponse(message.content);
                                 }}
-                                className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium bg-slate-800/40 text-slate-400 hover:text-white hover:bg-slate-700/60 transition-all border border-white/5 active:scale-95 touch-manipulation"
+                                className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium transition-all border active:scale-95 touch-manipulation ${theme === 'flora' || theme === 'light'
+                                  ? 'bg-white text-black hover:bg-slate-100 border-slate-200 shadow-sm'
+                                  : 'bg-slate-800/40 text-slate-400 hover:text-white hover:bg-slate-700/60 border-white/5'}`}
                                 title="Read aloud"
                               >
                                 <Volume2 className="w-3.5 h-3.5" />
@@ -2179,7 +3338,9 @@ function App() {
                                   handleRegenerate(index);
                                 }}
                                 disabled={isLoading}
-                                className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium bg-slate-800/40 text-slate-400 hover:text-white hover:bg-slate-700/60 transition-all border border-white/5 disabled:opacity-40 disabled:cursor-not-allowed active:scale-95 touch-manipulation"
+                                className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium transition-all border disabled:opacity-40 disabled:cursor-not-allowed active:scale-95 touch-manipulation ${theme === 'flora' || theme === 'light'
+                                  ? 'bg-white text-black hover:bg-slate-100 border-slate-200 shadow-sm'
+                                  : 'bg-slate-800/40 text-slate-400 hover:text-white hover:bg-slate-700/60 border-white/5'}`}
                                 title="Regenerate response"
                               >
                                 <RefreshCw className={`w-3.5 h-3.5 ${regeneratingIndex === index ? 'animate-spin' : ''}`} />
@@ -2234,7 +3395,7 @@ function App() {
 
                   <form
                     onSubmit={handleSubmit}
-                    className={`${theme === 'light' ? 'light-glass border-slate-300' : 'glass-panel border-white/10'} w-full p-1.5 sm:p-2 rounded-2xl flex items-center gap-2 shadow-2xl transition-all duration-300`}
+                    className={`${theme === 'light' ? 'bg-white border-slate-200' : 'glass-panel border-white/10'} w-full p-1.5 sm:p-2 rounded-2xl flex items-center gap-2 shadow-2xl transition-all duration-300`}
                   >
                     <textarea
                       value={input}
