@@ -1357,17 +1357,27 @@ function App() {
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
     const voices = window.speechSynthesis.getVoices();
-    const femaleVoice = voices.find(v =>
+    
+    // Prioritize Indian English Female voices
+    const indianFemaleVoice = voices.find(v => 
+      (v.lang.includes('en-IN') && (v.name.toLowerCase().includes('female') || v.name.toLowerCase().includes('veena') || v.name.toLowerCase().includes('heera'))) ||
+      (v.lang.includes('en-IN'))
+    );
+    
+    const fallbackFemaleVoice = voices.find(v =>
       v.name.toLowerCase().includes('female') ||
       v.name.toLowerCase().includes('samantha') ||
-      v.name.toLowerCase().includes('google uk english female') ||
-      v.name.toLowerCase().includes('victoria') ||
-      v.name.toLowerCase().includes('moira')
+      v.name.toLowerCase().includes('google uk english female')
     );
 
-    if (femaleVoice) utterance.voice = femaleVoice;
-    utterance.rate = 0.92;
-    utterance.pitch = 1.05;
+    if (indianFemaleVoice) {
+      utterance.voice = indianFemaleVoice;
+    } else if (fallbackFemaleVoice) {
+      utterance.voice = fallbackFemaleVoice;
+    }
+
+    utterance.rate = 0.85; // Slightly slower for softness
+    utterance.pitch = 1.1;  // Slightly higher for a gentle female tone
     utterance.volume = 1.0;
 
     window.speechSynthesis.speak(utterance);
