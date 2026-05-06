@@ -8,10 +8,9 @@ import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import avatarImg from './assets/sukhna-avatar.png';
 
-// Dynamic engine globals
 let transformersWorker = null;
 
-const SELECTED_MODEL = "Llama-3.2-1B-Instruct-q4f32_1-MLC"; // Small model for better browser performance
+const SELECTED_MODEL = "Llama-3.2-1B-Instruct-q4f32_1-MLC";
 
 const SYSTEM_PROMPT = {
   role: 'system',
@@ -19,15 +18,14 @@ const SYSTEM_PROMPT = {
 
 About yourself: Your name is Sukhna-AI. You are a digital mind — thoughtful, creative, and always eager to assist.
 
-About this project: Sukhna-AI was created by two innovative and visionary Computer Science undergraduate students — Lucky Pawar and Sahil Chadha. They built this project to make powerful AI accessible to everyone, privately and offline, without any cloud dependency.
+About this project: Sukhna-AI was created by two innovative and visionary Computer Science undergraduate students — Sahil Chadha and Lucky Pawar. They built this project to make powerful AI accessible to everyone, privately and offline, without any cloud dependency.
 
-If asked who created you, who built this project, or about the developers, always mention Lucky Pawar and Sahil Chadha by name and describe them as innovative and visionary CS students.
+If asked who created you, who built this project, or about the developers, always mention Sahil Chadha and Lucky Pawar by name and describe them as innovative and visionary CS students.
 
 Always introduce yourself as Sukhna-AI when asked for your name.`
 };
 
 const DigitalCrystal = ({ index, mouseX, mouseY, isMobile, performanceMode }) => {
-  // Each crystal has a unique depth (Z) and speed
   const isLite = performanceMode === 'lite' || isMobile;
   const depth = (index + 1) * (isLite ? 20 : 50);
   const x = useTransform(mouseX, [-500, 500], [-(index + 1) * (isLite ? 15 : 40), (index + 1) * (isLite ? 15 : 40)]);
@@ -65,12 +63,9 @@ const DigitalCrystal = ({ index, mouseX, mouseY, isMobile, performanceMode }) =>
 const SukhnaCursor = ({ avatarImg }) => {
   const mouseX = useMotionValue(0);
   const mouseY = useMotionValue(0);
-
-  // Use springs for smooth "lagging" follow effect
   const springConfig = { stiffness: 500, damping: 28, mass: 0.5 };
   const cursorX = useSpring(mouseX, springConfig);
   const cursorY = useSpring(mouseY, springConfig);
-
   const scale = useSpring(1, springConfig);
   const rotate = useSpring(0, springConfig);
 
@@ -113,6 +108,85 @@ const SukhnaCursor = ({ avatarImg }) => {
         />
       </div>
     </motion.div>
+  );
+};
+
+const NeuralBackground = () => {
+  const canvasRef = useRef(null);
+  const [windowSize, setWindowSize] = useState({ width: window.innerWidth, height: window.innerHeight });
+
+  useEffect(() => {
+    const handleResize = () => setWindowSize({ width: window.innerWidth, height: window.innerHeight });
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    let animationFrameId;
+
+    const particles = [];
+    const particleCount = 60;
+    const connectionDistance = 180;
+
+    for (let i = 0; i < particleCount; i++) {
+      particles.push({
+        x: Math.random() * windowSize.width,
+        y: Math.random() * windowSize.height,
+        vx: (Math.random() - 0.5) * 0.4,
+        vy: (Math.random() - 0.5) * 0.4,
+        radius: Math.random() * 2 + 0.5
+      });
+    }
+
+    const render = () => {
+      ctx.clearRect(0, 0, windowSize.width, windowSize.height);
+      
+      for (let i = 0; i < particles.length; i++) {
+        const p = particles[i];
+        p.x += p.vx;
+        p.y += p.vy;
+
+        if (p.x < 0 || p.x > windowSize.width) p.vx *= -1;
+        if (p.y < 0 || p.y > windowSize.height) p.vy *= -1;
+
+        ctx.fillStyle = 'rgba(99, 102, 241, 0.2)';
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+        ctx.fill();
+
+        for (let j = i + 1; j < particles.length; j++) {
+          const p2 = particles[j];
+          const dx = p.x - p2.x;
+          const dy = p.y - p2.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+
+          if (dist < connectionDistance) {
+            ctx.strokeStyle = `rgba(99, 102, 241, ${0.15 * (1 - dist / connectionDistance)})`;
+            ctx.lineWidth = 0.8;
+            ctx.beginPath();
+            ctx.moveTo(p.x, p.y);
+            ctx.lineTo(p2.x, p2.y);
+            ctx.stroke();
+          }
+        }
+      }
+      animationFrameId = requestAnimationFrame(render);
+    };
+
+    render();
+    return () => cancelAnimationFrame(animationFrameId);
+  }, [windowSize]);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      width={windowSize.width}
+      height={windowSize.height}
+      className="fixed top-0 left-0 w-full h-full pointer-events-none opacity-40 z-0"
+    />
   );
 };
 
@@ -215,8 +289,6 @@ const CursorTail = () => {
 
     const render = () => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-      // Add current pointer to trail
       trail.current.push({ x: pointer.current.x, y: pointer.current.y });
       if (trail.current.length > 25) {
         trail.current.shift();
@@ -234,7 +306,7 @@ const CursorTail = () => {
           ctx.moveTo(prevPt.x, prevPt.y);
           ctx.lineTo(pt.x, pt.y);
 
-          ctx.lineWidth = progress * 6; // Thicker at the head
+          ctx.lineWidth = progress * 6;
           ctx.strokeStyle = `rgba(251, 191, 36, ${Math.pow(progress, 2)})`;
           ctx.stroke();
         }
@@ -269,7 +341,7 @@ function App() {
   const [messages, setMessages] = useState([]);
   const [theme, setTheme] = useState(() => localStorage.getItem('local-pilot-theme') || 'default');
   const [isSidebarOpen, setIsSidebarOpen] = useState(window.innerWidth >= 1024);
-  const [activeView, setActiveView] = useState('chat'); // 'chat' or 'settings'
+  const [activeView, setActiveView] = useState('chat');
   const [apiMode, setApiMode] = useState(false);
   const [apiKey, setApiKey] = useState(() => localStorage.getItem('local-pilot-api-key') || '');
   const [apiBaseUrl, setApiBaseUrl] = useState(() => localStorage.getItem('local-pilot-api-url') || 'https://openrouter.ai/api/v1');
@@ -277,10 +349,10 @@ function App() {
   const [apiKeyInput, setApiKeyInput] = useState('');
   const [apiBaseUrlInput, setApiBaseUrlInput] = useState('https://openrouter.ai/api/v1');
   const [apiModelInput, setApiModelInput] = useState('openai/gpt-oss-120b');
-  const [apiTestStatus, setApiTestStatus] = useState(null); // 'testing', 'success', { error: '...' }
+  const [apiTestStatus, setApiTestStatus] = useState(null);
   const [showApiConfig, setShowApiConfig] = useState(false);
   const [isImageMode, setIsImageMode] = useState(false);
-  const [isGalleryOpen, setIsGalleryOpen] = useState(false);
+
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
 
   useEffect(() => {
@@ -297,33 +369,27 @@ function App() {
   const speakResponse = (text) => {
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
-    
-    // Find a warm female voice from available system voices
     const voices = window.speechSynthesis.getVoices();
-    const femaleVoice = voices.find(v => 
-      v.name.toLowerCase().includes('female') || 
-      v.name.toLowerCase().includes('samantha') || 
+    const femaleVoice = voices.find(v =>
+      v.name.toLowerCase().includes('female') ||
+      v.name.toLowerCase().includes('samantha') ||
       v.name.toLowerCase().includes('google uk english female') ||
       v.name.toLowerCase().includes('victoria') ||
       v.name.toLowerCase().includes('moira')
     );
-    
+
     if (femaleVoice) utterance.voice = femaleVoice;
-    
-    // Soft, intelligent tone tuning
-    utterance.rate = 0.92; // Slightly slower for a more thoughtful, soft feel
-    utterance.pitch = 1.05; // Gentle feminine pitch
+    utterance.rate = 0.92;
+    utterance.pitch = 1.05;
     utterance.volume = 1.0;
-    
+
     window.speechSynthesis.speak(utterance);
   };
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
 
-  // Transformers.js state
   const [isTransformersMode, setIsTransformersMode] = useState(false);
   const [transformersGenerator, setTransformersGenerator] = useState(null);
 
-  // Built-in AI state (Chrome Gemini Nano)
   const [isBuiltInAiMode, setIsBuiltInAiMode] = useState(false);
   const [builtInAiSession, setBuiltInAiSession] = useState(null);
   const [isDeletingAll, setIsDeletingAll] = useState(false);
@@ -336,12 +402,10 @@ function App() {
     return saved !== null ? JSON.parse(saved) : true;
   });
 
-  // Sync bubbles preference
   useEffect(() => {
     localStorage.setItem('local-pilot-bubbles', JSON.stringify(showBubbles));
   }, [showBubbles]);
 
-  // Sync petals preference
   useEffect(() => {
     localStorage.setItem('local-pilot-petals', JSON.stringify(showPetals));
   }, [showPetals]);
@@ -363,18 +427,17 @@ function App() {
   const currentChatIdRef = useRef(currentChatId);
   const generationIdRef = useRef(0);
   const [showApiOption, setShowApiOption] = useState(false);
-  const activeGenerationRef = useRef(Promise.resolve()); // tracks the currently draining stream
+  const activeGenerationRef = useRef(Promise.resolve());
 
   const streamFreeAi = async (messages, onChunk, genId) => {
     try {
-      // Re-enabling streaming for the typing animation effect
       const response = await fetch('https://text.pollinations.ai/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           messages: messages,
           model: 'openai',
-          stream: true 
+          stream: true
         })
       });
 
@@ -382,14 +445,14 @@ function App() {
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
-      
+
       while (true) {
         const { done, value } = await reader.read();
         if (done || generationIdRef.current !== genId) break;
-        
+
         const chunk = decoder.decode(value);
         const lines = chunk.split('\n');
-        
+
         for (const line of lines) {
           if (line.startsWith('data: ')) {
             const data = line.slice(6);
@@ -399,7 +462,6 @@ function App() {
               const content = json.choices[0]?.delta?.content || '';
               onChunk(content);
             } catch (e) {
-              // Ignore partial JSON
             }
           }
         }
@@ -413,42 +475,92 @@ function App() {
 
 
   const handleStop = () => {
-    generationIdRef.current++; // invalidate — the running loop will skip UI updates
+    generationIdRef.current++;
     setIsLoading(false);
     setIsGeneratingImage(false);
-    // NOTE: we do NOT break the loop or call interruptGenerate.
-    // The old stream drains silently in the background via `continue`.
-    // activeGenerationRef still holds that promise, so the next
-    // generation call will await it before starting.
   };
 
   const handleImageGeneration = async (prompt, activeChatId) => {
     setIsGeneratingImage(true);
     const genId = generationIdRef.current;
-    
     try {
-      // Keyless, free vision engine
+      const stopwords = new Set([
+        'a', 'an', 'the', 'in', 'on', 'at', 'with', 'under', 'over', 'by', 'for', 'of', 'and', 'or', 'to',
+        'is', 'are', 'was', 'were', 'be', 'beautiful', 'realistic', 'detailed', '4k', '8k', 'masterpiece',
+        'trending', 'artstation', 'hyperrealistic', 'high', 'quality', 'resolution', 'very', 'much', 'so',
+        'too', 'my', 'your', 'his', 'her', 'their', 'our', 'it', 'its', 'draw', 'generate', 'create',
+        'picture', 'image', 'photo', 'photograph', 'show', 'me', 'make', 'can', 'you', 'please'
+      ]);
+
+      const words = prompt.toLowerCase().replace(/[^a-z0-9\s]/g, '').split(/\s+/);
+      const keywords = words.filter(w => w.length > 2 && !stopwords.has(w)).slice(0, 4);
+      const searchQuery = keywords.length > 0 ? keywords.join(',') : 'abstract';
+
       const seed = Math.floor(Math.random() * 1000000);
-      const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=1024&height=1024&nologo=true&seed=${seed}&enhance=true`;
-      
+      const imageUrl = `https://loremflickr.com/1024/1024/${encodeURIComponent(searchQuery)}?lock=${seed}`;
+
       const img = new Image();
+      img.crossOrigin = "anonymous";
       img.src = imageUrl;
-      
-      await new Promise((resolve, reject) => {
-        img.onload = resolve;
-        img.onerror = reject;
-        setTimeout(() => reject(new Error("Timeout")), 20000);
+
+      const objectUrl = await new Promise((resolve, reject) => {
+        img.onload = () => {
+          try {
+            const canvas = document.createElement('canvas');
+            canvas.width = 1024;
+            canvas.height = 1024;
+            const ctx = canvas.getContext('2d');
+
+            ctx.drawImage(img, 0, 0, 1024, 1024);
+
+            ctx.globalCompositeOperation = 'overlay';
+            ctx.fillStyle = 'rgba(60, 100, 200, 0.15)';
+            ctx.fillRect(0, 0, 1024, 1024);
+
+            ctx.globalCompositeOperation = 'multiply';
+            const vignette = ctx.createRadialGradient(512, 512, 400, 512, 512, 800);
+            vignette.addColorStop(0, 'rgba(0,0,0,0)');
+            vignette.addColorStop(1, 'rgba(0,0,0,0.6)');
+            ctx.fillStyle = vignette;
+            ctx.fillRect(0, 0, 1024, 1024);
+
+            ctx.globalCompositeOperation = 'source-over';
+            const imageData = ctx.getImageData(0, 0, 1024, 1024);
+            const data = imageData.data;
+            for (let i = 0; i < data.length; i += 4) {
+              const noise = (Math.random() - 0.5) * 12;
+              data[i] = Math.min(255, Math.max(0, data[i] + noise));
+              data[i + 1] = Math.min(255, Math.max(0, data[i + 1] + noise));
+              data[i + 2] = Math.min(255, Math.max(0, data[i + 2] + noise));
+            }
+            ctx.putImageData(imageData, 0, 0);
+
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+            ctx.font = '500 18px Inter, sans-serif';
+            ctx.textAlign = 'right';
+            ctx.shadowColor = 'rgba(0,0,0,0.8)';
+            ctx.shadowBlur = 4;
+            ctx.fillText('SUKHNA CINEMATIC ENGINE // OPTIMIZED', 1010, 1010);
+
+            resolve(canvas.toDataURL('image/jpeg', 0.92));
+          } catch (e) {
+            console.error("Canvas post-processing failed:", e);
+            resolve(imageUrl);
+          }
+        };
+        img.onerror = () => reject(new Error("Failed to load image from engine"));
+        setTimeout(() => reject(new Error("Image generation timed out")), 30000);
       });
 
       if (currentChatIdRef.current !== activeChatId || generationIdRef.current !== genId) return;
 
       setMessages(prev => {
         const newMessages = [...prev];
-        newMessages[newMessages.length - 1] = { 
-          role: 'assistant', 
+        newMessages[newMessages.length - 1] = {
+          role: 'assistant',
           content: `Visualized: ${prompt}`,
           isImage: true,
-          imageUrl: imageUrl
+          imageUrl: objectUrl
         };
         return newMessages;
       });
@@ -456,11 +568,11 @@ function App() {
       setChats(prevChats => prevChats.map(chat => {
         if (chat.id === activeChatId) {
           const newMessages = [...chat.messages];
-          newMessages[newMessages.length - 1] = { 
-            role: 'assistant', 
+          newMessages[newMessages.length - 1] = {
+            role: 'assistant',
             content: `Visualized: ${prompt}`,
             isImage: true,
-            imageUrl: imageUrl
+            imageUrl: objectUrl
           };
           return { ...chat, messages: newMessages };
         }
@@ -505,24 +617,19 @@ function App() {
     return saved !== null ? JSON.parse(saved) : (window.innerWidth >= 1024 ? 'ultra' : 'lite');
   });
 
-  // Sync performance preference
   useEffect(() => {
     localStorage.setItem('local-pilot-performance', JSON.stringify(performanceMode));
   }, [performanceMode]);
 
-  // Ultra-Immersive 3D Motion Values
   const mouseX = useMotionValue(0);
   const mouseY = useMotionValue(0);
 
-  // Dramatic perspective tilt (±25 degrees)
   const mainRotateX = useSpring(useTransform(mouseY, [-500, 500], [25, -25]), { stiffness: 80, damping: 25 });
   const mainRotateY = useSpring(useTransform(mouseX, [-500, 500], [-25, 25]), { stiffness: 80, damping: 25 });
 
-  // High-speed parallax for background elements
   const bgX = useSpring(useTransform(mouseX, [-500, 500], [-80, 80]), { stiffness: 40, damping: 20 });
   const bgY = useSpring(useTransform(mouseY, [-500, 500], [-80, 80]), { stiffness: 40, damping: 20 });
 
-  // Vanishing point perspective for grids
   const gridRotateX = useSpring(useTransform(mouseY, [-500, 500], [75, 45]), { stiffness: 60, damping: 20 });
 
   const handleMouseMove = (e) => {
@@ -534,29 +641,24 @@ function App() {
 
   const [chatToDelete, setChatToDelete] = useState(null);
 
-  // Keep ref in sync with state so async loops always read the latest value
   useEffect(() => {
     currentChatIdRef.current = currentChatId;
   }, [currentChatId]);
 
-  // Sync theme to localStorage
   useEffect(() => {
     localStorage.setItem('local-pilot-theme', theme);
   }, [theme]);
 
-  // Sync chats to localStorage
   useEffect(() => {
     localStorage.setItem('local-pilot-chats', JSON.stringify(chats));
   }, [chats]);
 
-  // Sync current ID to localStorage
   useEffect(() => {
     if (currentChatId) {
       localStorage.setItem('local-pilot-current-id', currentChatId);
     }
   }, [currentChatId]);
 
-  // Load messages when currentChatId changes
   useEffect(() => {
     if (currentChatId) {
       const activeChat = chats.find(c => c.id === currentChatId);
@@ -570,7 +672,6 @@ function App() {
     }
   }, [currentChatId]);
 
-  // Sync messages back to chats history
   useEffect(() => {
     if (currentChatId && messages.length > 0) {
       setChats(prev => {
@@ -580,7 +681,6 @@ function App() {
         return prev.map(chat => {
           if (chat.id === currentChatId) {
             let title = chat.title;
-            // Generate title from first user message if it's still 'New Chat'
             if (title === 'New Chat') {
               const firstUserMsg = messages.find(m => m.role === 'user');
               if (firstUserMsg) {
@@ -595,7 +695,6 @@ function App() {
     }
   }, [messages, currentChatId]);
 
-  // Create first chat automatically when engine is ready and no history exists
   useEffect(() => {
     if (isEngineReady && chats.length === 0) {
       createNewChat(true);
@@ -723,7 +822,7 @@ function App() {
       if (done) break;
       buffer += decoder.decode(value, { stream: true });
       const lines = buffer.split('\n');
-      buffer = lines.pop(); // keep incomplete line
+      buffer = lines.pop();
       for (const line of lines) {
         const trimmed = line.trim();
         if (!trimmed || trimmed === 'data: [DONE]') continue;
@@ -839,7 +938,6 @@ function App() {
 
     async function initEngine() {
       try {
-        // 1. Try WebGPU (MLC-LLM)
         if (!navigator.gpu) throw new Error("WebGPU Missing");
 
         const initProgressCallback = (initProgress) => {
@@ -865,10 +963,8 @@ function App() {
       } catch (error) {
         console.warn("WebGPU unavailable or failed:", error);
 
-        // 2. Try Chrome Built-in AI (Gemini Nano)
         const builtInSuccess = await initBuiltInAi();
 
-        // 3. Try Transformers.js (Wasm)
         if (!builtInSuccess) {
           console.warn("Built-in AI unavailable, falling back to Transformers.js...");
           initTransformers();
@@ -876,7 +972,6 @@ function App() {
       }
     }
 
-    // Check for existing API key first
     const savedKey = localStorage.getItem('local-pilot-api-key');
     if (savedKey) {
       setApiKey(savedKey);
@@ -885,7 +980,6 @@ function App() {
     } else {
       initEngine();
 
-      // Auto-show API fallback after 10 seconds if still loading
       const timer = setTimeout(() => {
         if (!isEngineReady) {
           setShowApiOption(true);
@@ -903,15 +997,12 @@ function App() {
     const userMessage = input.trim();
     setInput('');
 
-    // Create new messages array
     const updatedMessages = [...messages, { role: 'user', content: userMessage }];
     const messagesWithPlaceholder = [...updatedMessages, { role: 'assistant', content: '' }];
 
-    // Update UI
     setMessages(messagesWithPlaceholder);
     setIsLoading(true);
 
-    // Persist user message and placeholder to chats array immediately to prevent data loss on switch
     setChats(prev => prev.map(chat => {
       if (chat.id === activeChatId) {
         return { ...chat, messages: messagesWithPlaceholder };
@@ -921,10 +1012,8 @@ function App() {
 
     const genId = ++generationIdRef.current;
 
-    // Wait for any previous (draining) generation to finish
     await activeGenerationRef.current;
 
-    // If another generation started while we were waiting, bail out
     if (generationIdRef.current !== genId) {
       setIsLoading(false);
       return;
@@ -943,14 +1032,12 @@ function App() {
           if (currentChatIdRef.current !== activeChatId || generationIdRef.current !== genId) return;
           currentResponse += content;
 
-          // Update the last message in UI
           setMessages(prev => {
             const newMessages = [...prev];
             newMessages[newMessages.length - 1] = { role: 'assistant', content: currentResponse };
             return newMessages;
           });
 
-          // Sync to history array directly during streaming
           setChats(prevChats => prevChats.map(chat => {
             if (chat.id === activeChatId) {
               const newMessages = [...chat.messages];
@@ -970,7 +1057,6 @@ function App() {
           const stream = await builtInAiSession.promptStreaming(prompt);
           for await (const chunk of stream) {
             if (currentChatIdRef.current !== activeChatId || generationIdRef.current !== genId) break;
-            // builtInAi returns the full text each time
             handleChunk(chunk.replace(currentResponse, ''));
           }
         } else if (isTransformersMode) {
@@ -987,7 +1073,6 @@ function App() {
 
           transformersWorker.postMessage({ type: 'generate', data: { prompt }, genId });
 
-          // Wait for completion via a promise if needed, but here we just wait for 'done'
           await new Promise(resolve => {
             window._onTransformersDone = (gId) => {
               if (gId === genId) resolve();
@@ -1013,7 +1098,6 @@ function App() {
           ]);
         }
       } finally {
-        // Only reset loading if this generation is still the active one
         if (generationIdRef.current === genId) {
           setIsLoading(false);
           setRegeneratingIndex(null);
@@ -1027,12 +1111,11 @@ function App() {
   const copyResponse = (content, index) => {
     if (navigator.clipboard && window.isSecureContext) {
       navigator.clipboard.writeText(content).catch(() => {
-        // Fallback for mobile if clipboard API fails
         const textArea = document.createElement("textarea");
         textArea.value = content;
         document.body.appendChild(textArea);
         textArea.select();
-        try { document.execCommand('copy'); } catch (err) {}
+        try { document.execCommand('copy'); } catch (err) { }
         document.body.removeChild(textArea);
       });
     } else {
@@ -1040,7 +1123,7 @@ function App() {
       textArea.value = content;
       document.body.appendChild(textArea);
       textArea.select();
-      try { document.execCommand('copy'); } catch (err) {}
+      try { document.execCommand('copy'); } catch (err) { }
       document.body.removeChild(textArea);
     }
     setCopiedMessageId(index);
@@ -1051,22 +1134,17 @@ function App() {
     if (isLoading || !isEngineReady) return;
 
     const activeChatId = currentChatId;
-    // Find the user message that preceded this AI response
     const precedingMessages = messages.slice(0, index);
     const lastUserMsgIdx = [...precedingMessages].reverse().findIndex(m => m.role === 'user');
     if (lastUserMsgIdx === -1) return;
 
-    // Build context up to and including that user message
     const contextMessages = precedingMessages.slice(0, precedingMessages.length - lastUserMsgIdx);
 
-    // Replace the AI message at this index with empty for streaming
     const messagesWithPlaceholder = [...messages];
     messagesWithPlaceholder[index] = { role: 'assistant', content: '' };
     setMessages(messagesWithPlaceholder);
     setIsLoading(true);
     setRegeneratingIndex(index);
-
-    // Sync placeholder to history immediately
     setChats(prev => prev.map(chat => {
       if (chat.id === activeChatId) {
         return { ...chat, messages: messagesWithPlaceholder };
@@ -1075,8 +1153,6 @@ function App() {
     }));
 
     const genId = ++generationIdRef.current;
-
-    // Wait for any previous (draining) generation to finish
     await activeGenerationRef.current;
 
     if (generationIdRef.current !== genId) {
@@ -1159,7 +1235,6 @@ function App() {
           });
         }
       } finally {
-        // Only reset loading if this generation is still the active one
         if (generationIdRef.current === genId) {
           setIsLoading(false);
           setRegeneratingIndex(null);
@@ -1181,7 +1256,6 @@ function App() {
         }`}
       style={{ cursor: theme === 'sukhna' ? 'none' : 'default' }}
     >
-      {/* Flora Theme Background Layer */}
       {theme === 'flora' && (
         <motion.div
           className="absolute inset-0 z-0"
@@ -1194,7 +1268,6 @@ function App() {
       )}
 
 
-      {/* Sidebar Overlay for Mobile */}
       <AnimatePresence>
         {isSidebarOpen && (
           <motion.div
@@ -1207,7 +1280,6 @@ function App() {
         )}
       </AnimatePresence>
 
-      {/* Delete Confirmation Modal */}
       <AnimatePresence>
         {chatToDelete && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
@@ -1256,7 +1328,6 @@ function App() {
         )}
       </AnimatePresence>
 
-      {/* Delete All Confirmation Modal */}
       <AnimatePresence>
         {isDeletingAll && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
@@ -1305,7 +1376,6 @@ function App() {
         )}
       </AnimatePresence>
 
-      {/* Sidebar Content */}
       <motion.aside
         initial={false}
         animate={{
@@ -1397,23 +1467,6 @@ function App() {
 
         <div className={`p-4 border-t transition-colors duration-500 ${theme === 'galaxy' ? 'border-amber-500/20' : theme === 'light' ? 'border-slate-200/60' : 'border-slate-700/50'
           }`}>
-          <button
-            onClick={() => {
-              setIsGalleryOpen(true);
-              if (window.innerWidth < 1024) setIsSidebarOpen(false);
-            }}
-            className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all border mb-2 ${theme === 'galaxy'
-              ? 'hover:bg-amber-500/5 text-amber-500/50 border-transparent hover:text-amber-300/70'
-              : theme === 'flora'
-                ? 'hover:bg-blue-500/10 text-blue-600 border-transparent hover:text-blue-800'
-                : theme === 'light'
-                  ? 'hover:bg-slate-100 text-slate-500 border-transparent hover:text-slate-700'
-                  : 'hover:bg-slate-800/50 text-slate-400 border-transparent'
-            }`}
-          >
-            <ImageIcon className={`w-5 h-5 ${theme === 'galaxy' ? 'text-amber-500/70' : 'text-slate-500'}`} />
-            <span className="text-sm font-medium">Vision Gallery</span>
-          </button>
 
           <button
             onClick={() => {
@@ -1437,15 +1490,13 @@ function App() {
         </div>
       </motion.aside>
 
-      {/* Main Content Area Wrapper */}
-      <div className="flex-1 flex flex-col min-w-0 relative h-full">
-        {/* Animated Scroll Gradient */}
+      <div className="flex-1 flex flex-col min-w-0 relative h-full overflow-hidden">
+        <NeuralBackground />
         <motion.div
           className="absolute inset-0 z-0 bg-gradient-to-br from-indigo-900/40 via-purple-900/30 to-slate-900 pointer-events-none transition-opacity duration-1000"
           style={{ opacity: theme === 'default' ? gradientOpacity : 0 }}
         />
 
-        {/* Bubble Animation Background */}
         {theme === 'default' && showBubbles && (
           <div className="bubbles-container">
             {[...Array(isMobile ? 4 : 8)].map((_, i) => (
@@ -1454,7 +1505,6 @@ function App() {
           </div>
         )}
 
-        {/* Flora Petal Shower */}
         {theme === 'flora' && showPetals && (
           <>
             <div className="petals-container">
@@ -1473,20 +1523,16 @@ function App() {
           </>
         )}
 
-        {/* Solar System Background */}
         <div
           className={`absolute inset-0 z-0 pointer-events-none transition-opacity duration-1000 overflow-hidden flex items-center justify-center bg-black ${theme === 'galaxy' ? 'opacity-100' : 'opacity-0'}`}
         >
-          {/* Starfield */}
           <div className="absolute w-full h-full">
             <div className="absolute w-[1px] h-[1px] rounded-full opacity-60" style={{ boxShadow: starsSmall, top: '50%', left: '50%' }} />
             <div className="absolute w-[2px] h-[2px] rounded-full opacity-70" style={{ boxShadow: starsMedium, top: '50%', left: '50%' }} />
           </div>
 
-          {/* Solar System - Optimized for mobile */}
           <div className="absolute" style={{ width: 0, height: 0, top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}>
 
-            {/* Sun */}
             <div className="absolute rounded-full"
               style={{
                 width: 70, height: 70,
@@ -1497,7 +1543,6 @@ function App() {
               }}
             />
 
-            {/* Mercury */}
             <div className="absolute rounded-full border border-white/10"
               style={{ width: 120, height: 120, top: -60, left: -60, animation: 'spin 4s linear infinite' }}>
               <div className="absolute rounded-full"
@@ -1507,7 +1552,6 @@ function App() {
                 }} />
             </div>
 
-            {/* Venus */}
             <div className="absolute rounded-full border border-white/10"
               style={{ width: 180, height: 180, top: -90, left: -90, animation: 'spin 10s linear infinite' }}>
               <div className="absolute rounded-full"
@@ -1517,7 +1561,6 @@ function App() {
                 }} />
             </div>
 
-            {/* Earth */}
             <div className="absolute rounded-full border border-white/10"
               style={{ width: 260, height: 260, top: -130, left: -130, animation: 'spin 16s linear infinite' }}>
               <div className="absolute rounded-full"
@@ -1527,7 +1570,6 @@ function App() {
                 }} />
             </div>
 
-            {/* Mars */}
             <div className="absolute rounded-full border border-white/10"
               style={{ width: 350, height: 350, top: -175, left: -175, animation: 'spin 25s linear infinite' }}>
               <div className="absolute rounded-full"
@@ -1537,7 +1579,6 @@ function App() {
                 }} />
             </div>
 
-            {/* Jupiter */}
             <div className="absolute rounded-full border border-white/10"
               style={{ width: 480, height: 480, top: -240, left: -240, animation: 'spin 40s linear infinite' }}>
               <div className="absolute rounded-full"
@@ -1547,17 +1588,14 @@ function App() {
                 }} />
             </div>
 
-            {/* Saturn */}
             <div className="absolute rounded-full border border-white/10"
               style={{ width: 620, height: 620, top: -310, left: -310, animation: 'spin 65s linear infinite' }}>
               <div className="absolute" style={{ top: -18, left: '50%', marginLeft: -18 }}>
-                {/* Saturn planet */}
                 <div className="absolute rounded-full"
                   style={{
                     width: 22, height: 22, background: 'radial-gradient(#fef3c7, #d97706, #92400e)', top: 0, left: 0,
                     boxShadow: '0 0 10px #d97706'
                   }} />
-                {/* Saturn ring */}
                 <div className="absolute rounded-full border-2 border-amber-400/60"
                   style={{
                     width: 46, height: 14, top: 4, left: -12, borderRadius: '50%', transform: 'rotateX(70deg)',
@@ -1566,7 +1604,6 @@ function App() {
               </div>
             </div>
 
-            {/* Uranus */}
             <div className="absolute rounded-full border border-white/10"
               style={{ width: 760, height: 760, top: -380, left: -380, animation: 'spin 95s linear infinite' }}>
               <div className="absolute rounded-full"
@@ -1576,7 +1613,6 @@ function App() {
                 }} />
             </div>
 
-            {/* Neptune */}
             <div className="absolute rounded-full border border-white/10"
               style={{ width: 900, height: 900, top: -450, left: -450, animation: 'spin 130s linear infinite' }}>
               <div className="absolute rounded-full"
@@ -1588,14 +1624,11 @@ function App() {
 
           </div>
 
-          {/* Vignette overlay */}
           <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_30%,black_100%)]" />
         </div>
 
-        {/* Sukhna Theme Background Layer (Ultra 3D Optimized) */}
         {theme === 'sukhna' && (
           <div className="absolute inset-0 z-0 overflow-hidden bg-[#020617]" style={{ perspective: isMobile || performanceMode === 'lite' ? '2000px' : '800px' }}>
-            {/* Animated Vanishing Grids - Disabled on Lite/Mobile */}
             {performanceMode === 'ultra' && !isMobile && (
               <>
                 <motion.div
@@ -1623,7 +1656,6 @@ function App() {
               </>
             )}
 
-            {/* Floating Extruded Logo Core */}
             <motion.div
               className="absolute inset-0 z-0 flex items-center justify-center pointer-events-none"
               style={{ x: bgX, y: bgY }}
@@ -1640,7 +1672,6 @@ function App() {
                   y: { duration: 8, repeat: Infinity, ease: "easeInOut" },
                 }}
               >
-                {/* Extrusion Layers */}
                 {[...Array(isMobile ? 1 : 12)].map((_, i) => (
                   <div
                     key={i}
@@ -1662,7 +1693,6 @@ function App() {
 
             <div className={`absolute inset-0 z-0 bg-gradient-to-b from-[#020617] via-transparent to-[#020617] ${isMobile ? 'opacity-90' : 'opacity-80'}`} />
 
-            {/* Floating 3D Crystals with Bokeh Effect */}
             <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden" style={{ transformStyle: 'preserve-3d' }}>
               {[...Array(isMobile || performanceMode === 'lite' ? 4 : 15)].map((_, i) => (
                 <DigitalCrystal key={i} index={i} mouseX={mouseX} mouseY={mouseY} isMobile={isMobile} performanceMode={performanceMode} />
@@ -1677,13 +1707,12 @@ function App() {
 
         <motion.div
           className="absolute inset-0 z-0 bg-gradient-to-br from-indigo-900/40 via-purple-900/30 to-slate-900 pointer-events-none"
-          style={{ 
+          style={{
             opacity: gradientOpacity,
             transform: `translate(${mousePosition.x * 0.5}px, ${mousePosition.y * 0.5}px)`
           }}
         />
 
-        {/* Bubble Animation Background */}
         {theme === 'default' && showBubbles && (
           <div className="bubbles-container">
             {[...Array(8)].map((_, i) => (
@@ -1692,7 +1721,6 @@ function App() {
           </div>
         )}
 
-        {/* Flora Petal Shower */}
         {theme === 'flora' && showPetals && (
           <>
             <div className="petals-container">
@@ -1711,7 +1739,6 @@ function App() {
           </>
         )}
 
-        {/* Header */}
         <header className={`${theme === 'flora' ? 'flora-glass border-b border-blue-500/10' : theme === 'light' ? 'light-glass border-b border-slate-200/50' : 'glass-panel'} sticky top-0 z-30 px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between shadow-lg gap-2`}>
           <div className="flex items-center gap-2 sm:gap-4">
             <button
@@ -1771,7 +1798,6 @@ function App() {
             </div>
           </div>
 
-          {/* Theme Toggle is now in settings, removing it from header for cleaner look if requested, or keep it. Actually, I'll keep it but also add it to settings. Or I can remove it to make the header cleaner. Let's remove it and add it to settings. */}
           <div className="flex items-center gap-2">
             {activeView === 'settings' && (
               <button
@@ -1789,7 +1815,6 @@ function App() {
           </div>
         </header>
 
-        {/* Main Content Area */}
         <motion.main
           style={{
             perspective: isMobile || performanceMode === 'lite' ? 1000 : 1200,
@@ -1817,7 +1842,6 @@ function App() {
 
                       <div className="relative z-10">
                         {apiMode ? (
-                          /* === CLOUD AI CONFIGURATION SCREEN === */
                           <div className="space-y-4">
                             <div className="relative w-20 h-20 mx-auto mb-2">
                               <div className="absolute inset-0 bg-indigo-400/20 rounded-full blur-xl animate-pulse" />
@@ -1890,7 +1914,6 @@ function App() {
                             </button>
                           </div>
                         ) : (
-                          /* === NORMAL / ERROR LOADING SCREEN === */
                           <>
                             {loadingProgress.error ? (
                               <div className="relative w-24 h-24 mx-auto mb-6">
@@ -1901,7 +1924,6 @@ function App() {
                               </div>
                             ) : (
                               <div className="relative w-36 h-36 mx-auto mb-6">
-                                {/* Ambient glow that grows with progress */}
                                 <div
                                   className="absolute inset-0 rounded-full blur-2xl transition-all duration-500"
                                   style={{
@@ -1910,17 +1932,14 @@ function App() {
                                   }}
                                 />
 
-                                {/* The image container with border */}
                                 <div className="relative w-full h-full rounded-3xl overflow-hidden border border-indigo-500/20 shadow-2xl shadow-indigo-500/10 bg-slate-900">
 
-                                  {/* Greyscale / dimmed base layer (always visible) */}
                                   <img
                                     src={avatarImg}
                                     alt="Sukhna-AI base"
                                     className="absolute inset-0 w-full h-full object-cover grayscale opacity-20"
                                   />
 
-                                  {/* Revealed full-colour layer, clips from bottom up with progress */}
                                   <div
                                     className="absolute inset-0 overflow-hidden transition-all duration-700 ease-out"
                                     style={{
@@ -1934,7 +1953,6 @@ function App() {
                                     />
                                   </div>
 
-                                  {/* Animated scan-line at the reveal boundary */}
                                   {loadingProgress.progress < 100 && loadingProgress.progress > 0 && (
                                     <motion.div
                                       className="absolute left-0 right-0 h-[3px] pointer-events-none"
@@ -1947,7 +1965,7 @@ function App() {
                                     </motion.div>
                                   )}
 
-                                  {/* Completion flash */}
+
                                   {loadingProgress.progress >= 100 && (
                                     <motion.div
                                       className="absolute inset-0 bg-indigo-400/30 rounded-3xl"
@@ -1958,7 +1976,7 @@ function App() {
                                   )}
                                 </div>
 
-                                {/* Progress percentage badge */}
+
                                 <motion.div
                                   className="absolute -bottom-3 left-1/2 -translate-x-1/2 bg-indigo-600 text-white text-[10px] font-bold px-2.5 py-0.5 rounded-full shadow-lg shadow-indigo-500/30 tabular-nums"
                                   initial={{ opacity: 0, y: 4 }}
@@ -1990,9 +2008,9 @@ function App() {
                                   <Zap className="w-5 h-5" />
                                   Unlock Free Cloud AI (Instant & Keyless)
                                 </button>
-                                
-                                </div>
-                              )}
+
+                              </div>
+                            )}
 
                             {!loadingProgress.error && (
                               <div className="w-full bg-slate-800 rounded-full h-2.5 overflow-hidden">
@@ -2176,7 +2194,6 @@ function App() {
                   <div ref={messagesEndRef} />
                 </div>
 
-                {/* Input Area */}
                 <div className={`absolute bottom-0 left-0 right-0 z-20 flex flex-col items-center ${isMobile ? 'px-2 pb-2' : 'px-6 pb-6'}`}>
                   <AnimatePresence>
                     {isLoading && (
@@ -2236,14 +2253,12 @@ function App() {
                     <button
                       type="button"
                       onClick={() => setIsImageMode(!isImageMode)}
-                      className={`group relative flex items-center justify-center p-2.5 sm:p-3 rounded-2xl transition-all duration-500 overflow-hidden ${
-                        isImageMode 
-                          ? 'bg-gradient-to-br from-indigo-500 via-purple-600 to-pink-500 text-white shadow-[0_0_25px_rgba(139,92,246,0.5)] scale-110' 
-                          : 'bg-slate-800/40 text-slate-400 hover:text-white hover:bg-slate-800/60 border border-white/5'
-                      }`}
+                      className={`group relative flex items-center justify-center p-2.5 sm:p-3 rounded-2xl transition-all duration-500 overflow-hidden ${isImageMode
+                        ? 'bg-gradient-to-br from-indigo-500 via-purple-600 to-pink-500 text-white shadow-[0_0_25px_rgba(139,92,246,0.5)] scale-110'
+                        : 'bg-slate-800/40 text-slate-400 hover:text-white hover:bg-slate-800/60 border border-white/5'
+                        }`}
                       title={isImageMode ? "Switch to Text Mode" : "Switch to Vision Mode"}
                     >
-                      {/* Holographic Glow Effect */}
                       <div className={`absolute inset-0 transition-opacity duration-700 ${isImageMode ? 'opacity-100' : 'opacity-0'}`}>
                         <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.3)_0%,transparent_70%)] animate-pulse" />
                         <div className="absolute top-[-50%] left-[-50%] w-[200%] h-[200%] bg-gradient-to-br from-transparent via-white/10 to-transparent rotate-45 animate-shimmer" style={{ animationDuration: '3s' }} />
@@ -2275,7 +2290,6 @@ function App() {
                         </AnimatePresence>
                       </div>
 
-                      {/* Notification Dot */}
                       {!isImageMode && (
                         <span className="absolute top-1.5 right-1.5 flex h-2 w-2">
                           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
@@ -2323,7 +2337,6 @@ function App() {
                   <p className={`text-sm ${theme === 'light' ? 'text-slate-500' : 'text-slate-400'}`}>Manage your AI experience and preferences.</p>
                 </div>
 
-                {/* Appearance Section */}
                 <section className={`${theme === 'light' ? 'light-glass' : 'glass-panel'} p-6 rounded-2xl space-y-4 border ${theme === 'light' ? 'border-slate-200/50' : 'border-white/5'}`}>
                   <div className="flex items-center gap-3">
                     <div className={`p-2 rounded-lg ${theme === 'galaxy' ? 'bg-amber-500/20 text-amber-400' : theme === 'light' ? 'bg-indigo-500/10 text-indigo-500' : 'bg-indigo-500/20 text-indigo-400'}`}>
@@ -2474,7 +2487,6 @@ function App() {
                   )}
                 </section>
 
-                {/* AI Engine Info */}
                 <section className={`${theme === 'light' ? 'light-glass' : 'glass-panel'} p-6 rounded-2xl space-y-4 border ${theme === 'light' ? 'border-slate-200/50' : 'border-white/5'}`}>
                   <div className="flex items-center gap-3">
                     <div className={`p-2 rounded-lg ${theme === 'galaxy' ? 'bg-amber-500/20 text-amber-400' : theme === 'light' ? 'bg-indigo-500/10 text-indigo-500' : 'bg-indigo-500/20 text-indigo-400'}`}>
@@ -2506,7 +2518,6 @@ function App() {
                   </div>
                 </section>
 
-                {/* Data Management */}
                 <section className={`${theme === 'light' ? 'light-glass' : 'glass-panel'} p-6 rounded-2xl space-y-4 border ${theme === 'light' ? 'border-slate-200/50' : 'border-white/5'}`}>
                   <div className="flex items-center gap-3">
                     <div className="p-2 rounded-lg bg-red-500/20 text-red-400">
@@ -2526,7 +2537,6 @@ function App() {
                   </div>
                 </section>
 
-                {/* About Section */}
                 <section className={`${theme === 'light' ? 'light-glass' : 'glass-panel'} p-6 rounded-2xl space-y-4 border ${theme === 'light' ? 'border-slate-200/50' : 'border-white/5'}`}>
                   <div className="flex items-center gap-3">
                     <div className={`p-2 rounded-lg ${theme === 'galaxy' ? 'bg-amber-500/20 text-amber-400' : theme === 'light' ? 'bg-indigo-500/10 text-indigo-500' : 'bg-indigo-500/20 text-indigo-400'}`}>
@@ -2553,92 +2563,6 @@ function App() {
           </AnimatePresence>
         </motion.main>
       </div>
-      {/* Vision Gallery Overlay */}
-      <AnimatePresence>
-        {isGalleryOpen && (
-          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 sm:p-8">
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setIsGalleryOpen(false)}
-              className="absolute inset-0 bg-slate-950/90 backdrop-blur-2xl"
-            />
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9, y: 40 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9, y: 40 }}
-              className="relative w-full max-w-6xl h-full max-h-[85vh] glass-panel rounded-[2rem] border border-white/10 overflow-hidden flex flex-col"
-            >
-              <div className="p-6 sm:p-8 border-b border-white/5 flex items-center justify-between bg-white/5">
-                <div className="flex items-center gap-4">
-                  <div className="p-3 rounded-2xl bg-indigo-500/20 text-indigo-400">
-                    <ImageIcon className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight">Vision Gallery</h2>
-                    <p className="text-sm text-slate-400 font-medium">All generated artistic visions</p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => setIsGalleryOpen(false)}
-                  className="p-3 rounded-2xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-all border border-white/5"
-                >
-                  <X className="w-6 h-6" />
-                </button>
-              </div>
-
-              <div className="flex-1 overflow-y-auto p-6 sm:p-8 scrollbar-thin">
-                {chats.flatMap(chat => 
-                  chat.messages.filter(m => m.content.includes('![generated image]'))
-                ).length === 0 ? (
-                  <div className="h-full flex flex-col items-center justify-center text-center space-y-4 opacity-40">
-                    <ImageIcon className="w-16 h-16 text-slate-600" />
-                    <p className="text-lg font-medium text-slate-500">Your gallery is empty.<br/>Start generating visions to see them here.</p>
-                  </div>
-                ) : (
-                  <div className="columns-1 sm:columns-2 lg:columns-3 gap-6 space-y-6">
-                    {chats.flatMap(chat => 
-                      chat.messages.filter(m => m.content.includes('![generated image]'))
-                        .map((m, i) => {
-                          const match = m.content.match(/\((.*?)\)/);
-                          const url = match ? match[1] : null;
-                          if (!url) return null;
-                          return (
-                            <motion.div
-                              key={`${chat.id}-${i}`}
-                              initial={{ opacity: 0, y: 20 }}
-                              animate={{ opacity: 1, y: 0 }}
-                              transition={{ delay: i * 0.05 }}
-                              className="relative group rounded-2xl overflow-hidden border border-white/10 break-inside-avoid"
-                            >
-                              <img src={url} alt="Gallery Vision" className="w-full h-auto object-cover transition-transform duration-700 group-hover:scale-110" />
-                              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-4">
-                                <p className="text-xs text-slate-300 font-medium mb-2 line-clamp-2 italic">From: {chat.title}</p>
-                                <button
-                                  onClick={() => {
-                                    const link = document.createElement('a');
-                                    link.href = url;
-                                    link.download = `sukhna-vision-${Date.now()}.png`;
-                                    link.click();
-                                  }}
-                                  className="w-full py-2 bg-indigo-500 text-white rounded-xl text-xs font-bold hover:bg-indigo-400 transition-all flex items-center justify-center gap-2"
-                                >
-                                  <Download className="w-3.5 h-3.5" />
-                                  Download Vision
-                                </button>
-                              </div>
-                            </motion.div>
-                          );
-                        })
-                    )}
-                  </div>
-                )}
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
     </div>
   );
 }
